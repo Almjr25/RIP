@@ -103,6 +103,39 @@ def validate_purchase(p):
     return result
 
 
+def image_references(p):
+    refs = {im['image'] for im in p.get('images', []) if re.fullmatch(r'[a-f0-9]{64}\.png', str(im.get('image', '')))}
+    refs.update(item['source'] for item in p.get('items', []) if re.fullmatch(r'[a-f0-9]{64}\.png', str(item.get('source', ''))))
+    for version in p.get('history', []):
+        refs.update(image_references(version))
+    return refs
+
+
+def delete_purchase(ident):
+    if not re.fullmatch(r'[a-f0-9]{32}', str(ident or '')):
+        raise ValueError('Identificação da nota inválida.')
+    with db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute('SELECT body FROM purchases WHERE id=?', (ident,)).fetchone()
+        if row is None:
+            raise ValueError('Esta nota não foi encontrada.')
+        candidates = image_references(json.loads(row[0]))
+        c.execute('DELETE FROM purchases WHERE id=?', (ident,))
+    # O registro já foi excluído. Limpe apenas arquivos não usados por outras notas/históricos.
+    warnings = []
+    with db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        retained = set()
+        for row in c.execute('SELECT body FROM purchases'):
+            retained.update(image_references(json.loads(row[0])))
+        for name in candidates - retained:
+            try:
+                (DATA / 'images' / name).unlink(missing_ok=True)
+            except OSError:
+                warnings.append('Um anexo antigo não pôde ser removido do disco.')
+    return {'deleted': ident, 'warnings': warnings}
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT / 'web'), **kwargs)
@@ -143,6 +176,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not 0 < size <= 30 * 1024 * 1024:
                 return self.reply({'error': 'Envie até 30 MB por requisição.'}, 413)
             p = json.loads(self.rfile.read(size))
+            if self.path == '/api/purchases/delete':
+                return self.reply(delete_purchase(p.get('id')))
             if self.path == '/api/purchases':
                 if p.get('status') not in ('draft', 'confirmed'):
                     raise ValueError('Estado inválido.')

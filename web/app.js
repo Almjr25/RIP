@@ -61,6 +61,7 @@ function edit(existing){
   $('stateBadge').className='badge '+(purchase.status==='confirmed'?'confirmed':'');
   $('confirm').textContent='Salvar compra';
   $('legacyNotice').hidden=!(purchase.images?.length);
+  $('deletePurchase').hidden=!purchase.id;
   $('textDetails').open=!purchase.items.length;
   $('adjustments').open=Boolean(cents(purchase.discount)||cents(purchase.extra));
   renderItems();totals();dirty=false;window.scrollTo(0,0);
@@ -124,3 +125,14 @@ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.return
 const live=document.createElement('button');live.id='liveTotals';live.onclick=()=>document.querySelector('.summary').scrollIntoView({behavior:'smooth'});$('editorView').appendChild(live);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 list();
+
+async function removePurchase(){
+ if(busy||!purchase?.id)return;
+ const label=[purchase.store||'Estabelecimento não informado',purchase.date?purchase.date.split('-').reverse().join('/'):'Data não informada'].join(' · ');
+ if(!confirm(`Excluir a nota de ${label}? Serão removidos seus itens, texto e histórico de alterações. Anexos antigos exclusivos desta nota também serão removidos. Não é possível desfazer; backups anteriores ainda podem restaurá-la.`))return;
+ busy=true;$('deletePurchase').disabled=true;
+ try{const result=await api('/api/purchases/delete',{id:purchase.id});dirty=false;purchase=null;busy=false;await list();notify('Nota excluída. '+(result.warnings?.length?result.warnings.join(' '):'O histórico e os totais foram atualizados.'))}
+ catch(e){notify('Não foi possível excluir: '+e.message,true)}
+ finally{busy=false;$('deletePurchase').disabled=false}
+}
+$('deletePurchase').onclick=removePurchase;

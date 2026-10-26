@@ -51,7 +51,8 @@ def main():
     page=context.new_page();errors=[];external=[]
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.on('request',lambda r:external.append(r.url) if r.url.startswith(('http:','https:')) and not r.url.startswith(URL) else None)
-    page.on('dialog',lambda d:d.accept())
+    accept_dialog=lambda d:d.accept()
+    page.on('dialog',accept_dialog)
     def paste(value):
      page.locator('#textDetails').evaluate('(el)=>el.open=true')
      page.locator('#receiptText').fill(value)
@@ -62,6 +63,7 @@ def main():
     assert page.locator('#reviewed').count()==0
     assert page.locator('input[accept*="image"]').count()==0
     page.locator('#newPurchase').click()
+    assert page.locator('#deletePurchase').is_hidden()
     paste(TEXT)
     page.locator('#save').click()
     page.wait_for_function("!document.getElementById('listView').hidden")
@@ -162,6 +164,39 @@ def main():
     assert 'Pronta para salvar' in page.locator('#reconstructionSummary').inner_text()
     page.locator('#confirm').click()
     page.wait_for_function("!document.getElementById('listView').hidden")
+    # Excluir uma nota salva permite cancelar, atualiza totais e persiste a remoção.
+    target=page.evaluate("purchases.find(p=>p.store==='MERCADO TESTE').id")
+    before=int(page.locator('#count').inner_text())
+    page.locator(f'[data-open="{target}"]').click()
+    page.remove_listener('dialog',accept_dialog)
+    page.once('dialog',lambda d:d.dismiss())
+    page.locator('#deletePurchase').click()
+    assert page.locator('#editorView').is_visible()
+    assert page.evaluate('purchase.id')==target
+    page.on('dialog',accept_dialog)
+    page.locator('#deletePurchase').click()
+    page.wait_for_function("!document.getElementById('listView').hidden")
+    assert int(page.locator('#count').inner_text())==before-1
+    assert page.locator('#sum').inner_text().replace('\xa0',' ')=='R$ 79,19'
+    page.reload();page.locator('#count').wait_for()
+    page.wait_for_function('(count)=>Number(document.getElementById("count").textContent)===count',arg=before-1)
+    assert page.locator(f'[data-open="{target}"]').count()==0
+    if not BACKEND:
+     # Anexos históricos compartilhados só saem quando a última nota for excluída.
+     copy=dict(legacy,id='c'*32,store='OUTRA NOTA ANTIGA')
+     sharedfile=Path(temp)/'shared.json';sharedfile.write_text(json.dumps({'format':'rip-desktop','version':1,'purchases':[copy],'images':[image]}))
+     page.locator('#importBackup').set_input_files(str(sharedfile))
+     page.locator('[data-open="'+'c'*32+'"]').wait_for()
+     for ident,remaining_images in [('a'*32,1),('c'*32,0)]:
+      page.locator(f'[data-open="{ident}"]').click()
+      page.locator('#deletePurchase').click()
+      page.wait_for_function("!document.getElementById('listView').hidden")
+      assert page.evaluate("async()=>(await readAll('images')).length")==remaining_images
+     with page.expect_download() as info:page.locator('#exportBackup').click()
+     finalbackup=Path(temp)/'after-deletion.json';info.value.save_as(finalbackup)
+     finaldata=json.loads(finalbackup.read_text())
+     assert len(finaldata['purchases'])==1
+     assert finaldata['images']==[]
     assert not external,external
     assert not errors,errors
     browser.close()

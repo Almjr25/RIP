@@ -2,9 +2,36 @@
 const localDB = new Promise((resolve,reject)=>{const r=indexedDB.open('rip-desktop-v1',1);r.onupgradeneeded=()=>{r.result.createObjectStore('purchases',{keyPath:'id'});r.result.createObjectStore('images',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(Error('O navegador não permitiu abrir o banco local. Use Chrome ou Edge em uma janela normal.'))});
 async function readAll(store){const db=await localDB;return new Promise((resolve,reject)=>{const t=db.transaction(store,'readonly'),r=t.objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function writeLocal(store,value){const db=await localDB;return new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(value);t.oncomplete=()=>resolve(value);t.onerror=()=>reject(Error('Não foi possível guardar os dados. O espaço do navegador pode estar cheio.'));t.onabort=()=>reject(t.error)})}
+function imageReferences(p,refs=new Set()){
+  for(const im of p.images||[])if(/^[a-f0-9]{64}\.png$/.test(im.image))refs.add(im.image);
+  for(const item of p.items||[])if(/^[a-f0-9]{64}\.png$/.test(item.source||''))refs.add(item.source);
+  for(const version of p.history||[])imageReferences(version,refs);
+  return refs;
+}
+async function deleteLocalPurchase(id){
+  if(!/^[a-f0-9]{32}$/.test(id||''))throw Error('Identificação da nota inválida.');
+  const db=await localDB;
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(['purchases','images'],'readwrite'),store=tx.objectStore('purchases');
+    let error;
+    const request=store.getAll();
+    request.onsuccess=()=>{
+      const target=request.result.find(p=>p.id===id);
+      if(!target){error=Error('Esta nota não foi encontrada. Atualize o histórico.');tx.abort();return}
+      const retained=new Set();
+      for(const p of request.result)if(p.id!==id)imageReferences(p,retained);
+      for(const image of imageReferences(target))if(!retained.has(image))tx.objectStore('images').delete(image);
+      store.delete(id);
+    };
+    tx.oncomplete=()=>resolve({deleted:id});
+    tx.onerror=()=>reject(error||tx.error||Error('Não foi possível excluir a nota.'));
+    tx.onabort=()=>reject(error||tx.error||Error('A exclusão foi cancelada.'));
+  });
+}
 
 async function localAPI(path,body){
   await localDB;
+  if(path==='/api/purchases/delete')return deleteLocalPurchase(body?.id);
   if(path==='/api/purchases'&&!body)return (await readAll('purchases')).reverse();
   if(path==='/api/purchases'&&body){
     const p=structuredClone(body);if(p.status==='confirmed'){const checks=ReceiptValidation.validate(p);if(!checks.ready)throw Error(checks.issues.map(x=>x.message).join(' '))}p.id=p.id||crypto.randomUUID().replaceAll('-','');
