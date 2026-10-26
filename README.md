@@ -7,7 +7,7 @@ Registre compras de supermercado colando o texto da consulta da NFC-e. Versão 0
 1. Abra a consulta da NFC-e pelo QR code no navegador.
 2. Copie desde o nome do estabelecimento até o valor total, incluindo todos os produtos.
 3. No RIP, escolha **Adicionar cupom**, cole no campo **Conteúdo copiado da nota** e selecione **Interpretar texto**.
-4. Nome, CNPJ e total são preenchidos a partir do texto. Informe a data manualmente.
+4. Nome, CNPJ e total são preenchidos a partir do texto. Informe a data manualmente e preencha a chave de acesso se ela não tiver sido extraída do texto.
 5. O RIP verifica automaticamente os campos, a contagem de itens quando informada e os valores. Ajuste somente as pendências destacadas e selecione **Salvar compra**; se faltar informação, use **Salvar rascunho**. Não há declaração obrigatória de revisão manual.
 
 Interpretar novamente o mesmo texto não altera a lista. Um texto atualizado substitui os itens, sem acrescentar outra cópia; há confirmação quando existem alterações manuais que seriam perdidas. Se não houver produtos reconhecidos, os itens anteriores são preservados. Alterações no texto exigem nova interpretação antes de confirmar. O texto original, o último texto interpretado e as correções salvas acompanham a compra.
@@ -44,6 +44,7 @@ node scripts/build_portable.mjs
 node scripts/build_portable.mjs --vercel
 node tests/receipt.test.js
 node tests/validation.test.js
+node tests/fiscal.test.js
 ```
 
 Backend local opcional: Python 3.12+ e SQLite da biblioteca padrão, sem instalar pacotes:
@@ -66,3 +67,13 @@ A compra é salva quando os dados obrigatórios, quantidades, valores e contagem
 ## Excluir uma nota salva
 
 Abra a nota no histórico e selecione **Excluir nota salva** no resumo da compra. A confirmação identifica estabelecimento e data; cancelar mantém o registro. A exclusão remove a nota, seus itens, texto e histórico de alterações e atualiza totais/contadores. Anexos antigos exclusivos da nota também são removidos; anexos usados por outras notas ou seus históricos são preservados. A operação não tem desfazer; backups já exportados não são modificados e podem restaurar a nota se forem importados posteriormente. A ação vale para notas registradas e rascunhos já salvos, não para formulários ainda não salvos.
+
+## Chave de acesso obrigatória
+
+Para registrar uma nota, é obrigatória uma chave numérica de NFC-e (modelo 65), com 44 dígitos. O app aceita espaços de formatação, valida o dígito verificador, UF, mês e CNPJ contidos na chave, compara o emitente com o CNPJ informado e o mês/ano com a data da compra. A chave é preenchida automaticamente se o texto incluir o trecho Chave de acesso; caso contrário, deve ser colada separadamente. O mesmo identificador não pode ser salvo em duas notas no armazenamento atual.
+
+Rascunhos podem ficar sem chave ou com dados incompletos. Notas antigas não são apagadas ou modificadas em massa: aparecem com Chave pendente quando não há uma chave estruturalmente válida, e precisam completá-la para serem registradas novamente. Backups e histórico pessoal continuam preservados.
+
+**Validação estrutural não é autenticação fiscal.** Não há consulta à SEFAZ nesta versão; uma pessoa pode montar uma chave matematicamente válida ou associar texto alterado a uma chave real. Os dados persistidos recebem fiscalValidation.authenticity = not_checked, nunca uma indicação de autenticidade confirmada. Não existe ainda uma base estatística coletiva. Na futura centralização, existência e conteúdo da nota precisam de verificação fiscal confiável no servidor; declarações do navegador não podem ser tratadas como prova.
+
+Login, sincronização, categorias e uso estatístico coletivo permanecem para outra etapa. O app atual não compartilha cupons. A participação estatística futura deverá ser independente do uso pessoal, opcional e baseada em consentimento explícito.

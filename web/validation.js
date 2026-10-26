@@ -16,6 +16,12 @@
   if(!p.date)add('date','Informe a data da compra.');
   else if(!/^\d{4}-\d{2}-\d{2}$/.test(p.date)||Number.isNaN(Date.parse(p.date))||new Date(p.date).toISOString().slice(0,10)!==p.date)add('date','Informe uma data válida.');
   if(p.cnpj&&!root.ReceiptParser.validCNPJ(p.cnpj))add('cnpj','O CNPJ informado é inválido. Corrija-o ou deixe o campo vazio se não estiver disponível.');
+  const fiscal=root.ReceiptFiscal.inspect(p.key);
+  if(!fiscal.valid)add('key',fiscal.message);
+  else{
+   if(p.cnpj&&root.ReceiptParser.validCNPJ(p.cnpj)&&p.cnpj.replace(/\D/g,'')!==fiscal.cnpj)add('key','A chave pertence a outro CNPJ. Verifique a chave e o estabelecimento.');
+   if(p.date&&/^\d{4}-\d{2}-\d{2}$/.test(p.date)&&!Number.isNaN(Date.parse(p.date))&&new Date(p.date).toISOString().slice(0,10)===p.date&&p.date.slice(2,7).replace('-','')!==fiscal.yearMonth)add('key','O mês/ano da data da compra difere do mês/ano contido na chave.');
+  }
   const text=p.receiptText||'';
   if((p.parsedText&&text!==p.parsedText)||(!p.parsedText&&text.trim()))add('receiptText','O texto foi alterado. Selecione Interpretar texto para atualizar os itens.');
   if(!items.length)add('items','Importe pelo menos um item.');
@@ -40,7 +46,7 @@
   const difference=total!==null&&receiptTotal!==null?total-receiptTotal:null;
   if(total!==null&&total<0)add('discount','O desconto geral é maior que o valor disponível.');
   if(difference!==null&&difference!==0)add('difference','A soma dos itens e ajustes difere do total da nota. Verifique texto incompleto, descontos ou acréscimos.');
-  return {ready:!issues.length,issues,subtotal:validAmounts?subtotal:null,total,difference,expectedCount:expected??null,itemCount:items.length};
+  return {ready:!issues.length,issues,subtotal:validAmounts?subtotal:null,total,difference,expectedCount:expected??null,itemCount:items.length,fiscal};
  }
  root.ReceiptValidation={validate,cents,lineTotal};
  if(typeof module!=='undefined')module.exports={validate,cents,lineTotal};

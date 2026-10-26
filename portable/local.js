@@ -35,11 +35,12 @@ async function localAPI(path,body){
   if(path==='/api/purchases'&&!body)return (await readAll('purchases')).reverse();
   if(path==='/api/purchases'&&body){
     const p=structuredClone(body);if(p.status==='confirmed'){const checks=ReceiptValidation.validate(p);if(!checks.ready)throw Error(checks.issues.map(x=>x.message).join(' '))}p.id=p.id||crypto.randomUUID().replaceAll('-','');
-    const key=String(p.key||'').replace(/\D/g,'');
-    if(key&&key.length!==44)throw Error('A chave fiscal deve ter 44 dígitos ou ficar vazia.');
+    const key=ReceiptFiscal.normalize(p.key);
+    const fiscal=ReceiptFiscal.inspect(key);
+    p.fiscalValidation={keyStatus:fiscal.valid?'valid_format':key?'invalid':'missing',authenticity:'not_checked'};
     p.key=key;
     const all=await readAll('purchases');
-    if(key&&all.some(x=>x.id!==p.id&&x.key===key))throw Error('Já existe uma compra com esta chave fiscal.');
+    if(fiscal.valid&&all.some(x=>x.id!==p.id&&ReceiptFiscal.normalize(x.key)===key))throw Error('Já existe uma compra com esta chave fiscal.');
     const previous=all.find(x=>x.id===p.id);p.history=previous?.history||[];
     if(previous){const snapshot=structuredClone(previous);delete snapshot.history;p.history.push(snapshot)}
     p.updated=new Date().toISOString();await writeLocal('purchases',p);return p;

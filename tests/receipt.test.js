@@ -161,3 +161,10 @@ test('desconto de item não vira total e ajustes gerais são lidos separadamente
  const r=parse('MERCADO TESTE\nCNPJ: 11.222.333/0001-81\nPRODUTO (Código: 1)\nQtde.: 1 UN: UN Vl. Unit.: 10,00\nVl. Total\n9,50\nDesconto do item: 0,50\nQtd. total de itens: 1\nValor total R$: 9,50\nDescontos R$: 1,00\nAcréscimos R$: 0,25\nValor a pagar R$: 8,75','pasted-text');
  assert.equal(r.items[0].total,'9,50');assert.equal(r.items[0].discount,'0,50');assert.equal(r.discount,'1,00');assert.equal(r.extra,'0,25');assert.equal(r.receiptTotal,'8,75');
 });
+
+test('chave copiada em grupos é extraída sem confundir códigos de produto',()=>{
+ const key='26261011222333000181650010000000011123456784';
+ const r=parse(layout+'\nChave de acesso:\n'+key.match(/.{1,4}/g).join(' '),'pasted-text');
+ assert.equal(r.key,key);assert.equal(r.items.length,10);
+ assert.equal(parse(layout,'pasted-text').key,undefined);
+});

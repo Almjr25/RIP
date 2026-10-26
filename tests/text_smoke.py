@@ -13,6 +13,8 @@ ROOT=Path(__file__).resolve().parents[1]
 BACKEND=os.environ.get('RIP_TEST_BACKEND')=='1'
 PORT=8008 if BACKEND else 8009
 URL=f'http://127.0.0.1:{PORT}'
+KEY1='26261011222333000181650010000000011123456784'
+KEY2='26261011222333000181650010000000021123456781'
 TEXT='''MERCADO DE TESTE LTDA
 CNPJ: 11.222.333/0001-81
 PRODUTO A
@@ -79,6 +81,13 @@ def main():
     assert page.locator('#receiptTotal').input_value()=='79,19'
     assert page.locator('[data-field="unit"]').evaluate_all('(els)=>els.map(e=>e.value)')==['UN','KG','PCT']
     assert page.locator('#subtotal').inner_text().replace('\xa0',' ')=='R$ 79,19'
+    page.locator('#date').fill('2026-10-26')
+    page.locator('#confirm').click()
+    assert 'chave de acesso' in page.locator('#notice').inner_text()
+    page.locator('#key').fill(KEY1[:-1]+'5')
+    page.locator('#confirm').click()
+    assert 'verificador' in page.locator('#notice').inner_text()
+    page.locator('#key').fill(' '.join(KEY1[n:n+4] for n in range(0,44,4)))
     interpret()
     assert page.locator('.item').count()==3,'Interpretar novamente duplicou itens'
     assert page.locator('.item[open]').count()==0,'Itens válidos ficaram abertos para revisão obrigatória'
@@ -109,6 +118,8 @@ def main():
     context.set_offline(False)
     page.reload();page.locator('[data-open]').click()
     assert page.locator('#stateBadge').inner_text()=='Registrada'
+    assert page.locator('#key').input_value()==KEY1
+    assert page.evaluate('purchase.fiscalValidation.authenticity')=='not_checked'
     assert page.locator('.item').count()==3
     assert page.evaluate('purchase.items[1].unitRaw')=='KG9'
     assert page.locator('#receiptText').input_value()==TEXT+'\n'
@@ -146,7 +157,9 @@ def main():
     # Ajustes explícitos são importados; alterações manuais não são sobrescritas.
     page.locator('#newPurchase').click()
     adjustment='MERCADO TESTE\nCNPJ: 11.222.333/0001-81\nPRODUTO (Código: 1)\nQtde.: 1 UN: UN Vl. Unit.: 10,00\nVl. Total\n9,50\nDesconto do item: 0,50\nQtd. total de itens: 1\nDescontos R$: 1,00\nAcréscimos R$: 0,25\nValor a pagar R$: 8,75'
+    adjustment+='\nChave de acesso:\n'+KEY2
     paste(adjustment);interpret()
+    assert page.locator('#key').input_value()==KEY2
     assert page.locator('#discount').input_value()=='1,00'
     assert page.locator('#extra').input_value()=='0,25'
     assert page.locator('#adjustments').evaluate('(el)=>el.open')
@@ -162,6 +175,11 @@ def main():
     page.locator('#discount').fill('1,00')
     page.locator('#date').fill('2026-10-26')
     assert 'Pronta para salvar' in page.locator('#reconstructionSummary').inner_text()
+    page.locator('#key').fill(KEY1)
+    page.locator('#confirm').click()
+    page.wait_for_function("document.getElementById('notice').textContent.toLowerCase().includes('já existe')")
+    assert 'já existe' in page.locator('#notice').inner_text().lower()
+    page.locator('#key').fill(KEY2)
     page.locator('#confirm').click()
     page.wait_for_function("!document.getElementById('listView').hidden")
     # Excluir uma nota salva permite cancelar, atualiza totais e persiste a remoção.

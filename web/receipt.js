@@ -114,7 +114,8 @@
     if(merchant.cnpjWarning)warnings.push(merchant.cnpjWarning);
     const globalDiscount=discountMatch(tail);
     const globalExtra=tail.match(new RegExp('\\bAcr[eé]scimos?(?:\\s+(?:gerais|geral|total))?\\s*(?:R\\s*\\$)?\\s*[:;]?\\s*'+amountPattern,'i'));
-    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj,discount:globalDiscount?normalizeMoney(globalDiscount[1]):undefined,extra:globalExtra?normalizeMoney(globalExtra[1]):undefined};
+    const key=text.match(/\bChave\s+de\s+acesso\s*[:;]?\s*((?:\d[\s.-]*){43}\d)(?![\s.-]*\d)/i)?.[1]?.replace(/\D/g,'');
+    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj,key,discount:globalDiscount?normalizeMoney(globalDiscount[1]):undefined,extra:globalExtra?normalizeMoney(globalExtra[1]):undefined};
   }
   root.ReceiptParser={parse,validCNPJ,formatCNPJ,normalizeUnit};
   if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ,normalizeUnit};

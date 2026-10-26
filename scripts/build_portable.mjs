@@ -10,6 +10,7 @@ js=js.replace(apiLine,'async function api(path,body){return localAPI(path,body)}
 js=js.replace("if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});",'');
 for(const [from,to] of [
  ['<script src="/receipt.js" defer></script>',''],
+ ['<script src="/fiscal.js" defer></script>',''],
  ['<script src="/validation.js" defer></script>',''],
  ['<link rel="manifest" href="/manifest.json">',''],
  ['<link rel="icon" href="/icon.svg" type="image/svg+xml">',''],
@@ -19,7 +20,7 @@ for(const [from,to] of [
  ['PRIMEIRA VERSÃO · LOCAL','VERSÃO TEXTO · 0.4'],
  ['<title>RIP ·','<title>RIP 0.4 ·'],
  ['<div class="section-title">','<div class="backup-actions"><button class="secondary" id="exportBackup">Exportar backup</button><label class="secondary" style="cursor:pointer">Importar backup<input type="file" id="importBackup" accept="application/json,.json" hidden></label></div><div class="section-title">'],
- ['<script src="/app.js" defer></script>','<script>'+read('web/receipt.js')+'\n'+read('web/validation.js')+'\n'+read('portable/local.js')+'\n'+js+'</script>']
+ ['<script src="/app.js" defer></script>','<script>'+read('web/receipt.js')+'\n'+read('web/fiscal.js')+'\n'+read('web/validation.js')+'\n'+read('portable/local.js')+'\n'+js+'</script>']
 ])html=html.replaceAll(from,()=>to);
 if(process.argv.includes('--vercel')){
  const out=join(root,'dist');mkdirSync(out,{recursive:true});

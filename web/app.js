@@ -10,7 +10,7 @@ function lineCents(q,p){const a=fraction(q),b=fraction(p);return a&&b?rounded(a[
 function notify(s,error=false){$('notice').textContent=s;$('notice').className=error?'error':'';$('notice').hidden=false;$('notice').scrollIntoView({block:'nearest',behavior:'smooth'})}
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});let value;try{value=await r.json()}catch{throw Error('Resposta inesperada do servidor.')}if(!r.ok)throw Error(value.error||'Não foi possível concluir.');return value}
 
-function renderList(){const confirmed=purchases.filter(p=>p.status==='confirmed');$('count').textContent=purchases.length;$('pending').textContent=purchases.length-confirmed.length;$('sum').textContent=money(confirmed.reduce((s,p)=>s+cents(p.receiptTotal),0));$('historyCount').textContent=`${purchases.length} ${purchases.length===1?'compra':'compras'}`;$('purchaseList').innerHTML=purchases.length?purchases.map(p=>`<button class="purchase" data-open="${esc(p.id)}"><span class="receipt-icon">▤</span><div><h3>${esc(p.store||'Compra sem identificação')}</h3><p>${esc(p.date?p.date.split('-').reverse().join('/'):'Data não informada')} · ${p.items.length} itens</p></div><span class="amount">${Number.isFinite(cents(p.receiptTotal))?money(cents(p.receiptTotal)):'Total pendente'}</span><span class="badge ${p.status==='confirmed'?'confirmed':''}">${p.status==='confirmed'?'Registrada':'Rascunho'}</span><span>↗</span></button>`).join(''):`<div class="empty"><div class="empty-icon">▤</div><h3>Seu primeiro cupom é o começo.</h3><p>Guarde os preços de hoje para entender suas compras de amanhã. Comece colando o texto de um cupom.</p><button class="primary" id="emptyAdd">＋ Adicionar primeiro cupom</button></div>`;document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>edit(purchases.find(p=>p.id===b.dataset.open)));if($('emptyAdd'))$('emptyAdd').onclick=()=>edit()}
+function renderList(){const confirmed=purchases.filter(p=>p.status==='confirmed');$('count').textContent=purchases.length;$('pending').textContent=purchases.length-confirmed.length;$('sum').textContent=money(confirmed.reduce((s,p)=>s+cents(p.receiptTotal),0));$('historyCount').textContent=`${purchases.length} ${purchases.length===1?'compra':'compras'}`;$('purchaseList').innerHTML=purchases.length?purchases.map(p=>`<button class="purchase" data-open="${esc(p.id)}"><span class="receipt-icon">▤</span><div><h3>${esc(p.store||'Compra sem identificação')}</h3><p>${esc(p.date?p.date.split('-').reverse().join('/'):'Data não informada')} · ${p.items.length} itens</p></div><span class="amount">${Number.isFinite(cents(p.receiptTotal))?money(cents(p.receiptTotal)):'Total pendente'}</span><span class="badge ${p.status==='confirmed'?'confirmed':''}">${p.status==='confirmed'?'Registrada':'Rascunho'}</span>${!ReceiptFiscal.inspect(p.key).valid?'<span class="badge fiscal-pending">Chave pendente</span>':''}<span>↗</span></button>`).join(''):`<div class="empty"><div class="empty-icon">▤</div><h3>Seu primeiro cupom é o começo.</h3><p>Guarde os preços de hoje para entender suas compras de amanhã. Comece colando o texto de um cupom.</p><button class="primary" id="emptyAdd">＋ Adicionar primeiro cupom</button></div>`;document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>edit(purchases.find(p=>p.id===b.dataset.open)));if($('emptyAdd'))$('emptyAdd').onclick=()=>edit()}
 
 function snapshot(){const p={...purchase};for(const k of ['store','cnpj','date','key','discount','extra','receiptTotal'])p[k]=$(k).value;p.receiptText=$('receiptText').value;return p}
 function renderItems(){
@@ -24,6 +24,9 @@ function renderItems(){
 }
 function totals(){
  const r=ReceiptValidation.validate(snapshot());
+ const keyIssue=r.issues.find(x=>x.field==='key');
+ $('fiscalStatus').textContent=keyIssue?keyIssue.message:'Formato e dígito verificador válidos. Autenticidade ainda não consultada na SEFAZ.';
+ $('fiscalStatus').className=keyIssue?'fiscal-error':'fiscal-note';
  $('subtotal').textContent=r.subtotal===null?'Total indisponível':money(r.subtotal);
  $('calculated').textContent=r.total===null?'—':money(r.total);
  const live=$('liveTotals');if(live)live.textContent=`Soma: ${r.subtotal===null?'—':money(r.subtotal)} · Diferença: ${r.difference===null?'indisponível':money(r.difference)}`;
@@ -46,6 +49,7 @@ function totals(){
 function collect(){
   for(const k of ['store','cnpj','date','key','discount','extra','receiptTotal'])purchase[k]=$(k).value;
   delete purchase.reviewed;
+  purchase.key=ReceiptFiscal.normalize(purchase.key);
   purchase.receiptText=$('receiptText').value;
   return purchase;
 }
@@ -95,7 +99,7 @@ function interpretText(){
   purchase.inputMethod='text';purchase.itemsEdited=false;
   purchase.analysis={warnings:analysis.warnings,expectedCount:analysis.expectedCount};
   purchase.autoFields=purchase.autoFields||{};
-  for(const k of ['store','cnpj','receiptTotal','discount','extra']){
+  for(const k of ['store','cnpj','receiptTotal','discount','extra','key']){
     const value=analysis[k]??((['discount','extra'].includes(k)&&purchase.autoFields[k]!==undefined)?'0,00':undefined);
     if(value!==undefined&&value!==''&&!purchase.manualFields?.[k]&&(!$(k).value.trim()||purchase.autoFields[k]!==undefined||(['discount','extra'].includes(k)&&cents($(k).value)===0))){$(k).value=value;purchase.autoFields[k]=value}
   }
@@ -109,6 +113,7 @@ async function save(confirmed){
   collect();
   const checks=totals();
   if(confirmed&&!checks.ready){notify(checks.issues.filter(x=>x.index===null).map(x=>x.message).join(' ')||'Complete os campos pendentes nos itens destacados.',true);return}
+  if(confirmed)purchase.fiscalValidation={keyStatus:'valid_format',authenticity:'not_checked',cnpj:checks.fiscal.cnpj,yearMonth:checks.fiscal.yearMonth};
   if(confirmed)purchase.validation={method:'automatic',checkedAt:new Date().toISOString(),itemCount:checks.itemCount,expectedCount:checks.expectedCount,difference:checks.difference};
   purchase.status=confirmed?'confirmed':'draft';busy=true;
   try{purchase=await api('/api/purchases',purchase);dirty=false;busy=false;await list();notify(confirmed?'Compra registrada no seu histórico.':'Rascunho salvo. Você pode continuar depois.')}
@@ -136,3 +141,9 @@ async function removePurchase(){
  finally{busy=false;$('deletePurchase').disabled=false}
 }
 $('deletePurchase').onclick=removePurchase;
+
+$('key').onblur=()=>{
+ const result=ReceiptFiscal.inspect($('key').value);$('key').value=ReceiptFiscal.normalize($('key').value);
+ if(result.valid&&!$('cnpj').value.trim()&&!purchase.manualFields?.cnpj)$('cnpj').value=ReceiptParser.formatCNPJ(result.cnpj);
+ totals();
+};

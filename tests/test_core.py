@@ -31,11 +31,28 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(reconcile(p)['difference'], -50)
 
     def test_save_without_manual_review_declaration(self):
-        p = {'store': 'Mercado', 'date': '2026-10-26', 'items': [{'description': 'Leite', 'quantity': '2', 'unit': 'UN', 'unitPrice': '5,00', 'total': '10,00'}], 'receiptTotal': '10,00', 'analysis': {'expectedCount': 1}}
+        p = {'key': '26261011222333000181650010000000011123456784', 'store': 'Mercado', 'date': '2026-10-26', 'items': [{'description': 'Leite', 'quantity': '2', 'unit': 'UN', 'unitPrice': '5,00', 'total': '10,00'}], 'receiptTotal': '10,00', 'analysis': {'expectedCount': 1}}
         self.assertEqual(validate_purchase(p)['difference'], 0)
         p['analysis']['expectedCount'] = 2
         with self.assertRaises(ValueError):
             validate_purchase(p)
+
+    def test_fiscal_key_structure_and_correspondence(self):
+        key = '26261011222333000181650010000000011123456784'
+        self.assertTrue(server.inspect_fiscal_key(key)['valid'])
+        self.assertEqual(server.inspect_fiscal_key(key)['authenticity'], 'not_checked')
+        self.assertFalse(server.inspect_fiscal_key(key[:-1] + '5')['valid'])
+        self.assertFalse(server.inspect_fiscal_key('A' + key)['valid'])
+        self.assertFalse(server.inspect_fiscal_key('')['valid'])
+        p = {'key': key, 'cnpj': '11.222.333/0001-81', 'store': 'Mercado', 'date': '2026-10-26', 'items': [{'description': 'Leite', 'quantity': '2', 'unit': 'UN', 'unitPrice': '5,00', 'total': '10,00'}], 'receiptTotal': '10,00'}
+        self.assertEqual(server.validate_purchase(p)['difference'], 0)
+        p['date'] = '2026-09-26'
+        with self.assertRaisesRegex(ValueError, 'mês/ano'):
+            server.validate_purchase(p)
+        p['date'] = '2026-10-26'
+        p['key'] = ''
+        with self.assertRaisesRegex(ValueError, 'chave'):
+            server.validate_purchase(p)
 
 
 class DeleteTests(unittest.TestCase):

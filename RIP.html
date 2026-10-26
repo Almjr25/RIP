@@ -10,10 +10,12 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
 .item{margin:0!important;padding:0;border-bottom:1px solid var(--line);color:var(--ink)}.item>summary{list-style:none;display:flex;align-items:center;gap:12px;padding:17px 0;cursor:pointer}.item>summary::-webkit-details-marker{display:none}.item-number{font-size:10px;color:var(--muted)}.item-overview{flex:1;min-width:0;display:grid;gap:6px}.item-name{font-size:12px;font-weight:600;overflow-wrap:anywhere}.item-meta{font-size:10px;color:var(--muted)}.item-amount{font-size:12px;white-space:nowrap}.item-expand{font-size:9px;color:var(--green);white-space:nowrap}.item-editor{background:#fafbf8;border-radius:6px;padding:15px;margin-bottom:14px}.item-invalid>summary{color:#a34c27}.remove-item{color:#9d6047;margin-top:10px}.adjustments>summary,.text-toggle{cursor:pointer;font-size:12px;font-weight:600;color:var(--green);padding:6px 0}.adjustments{border-top:1px solid var(--line);padding-top:14px;margin-top:15px}.reconstruction-summary ul{font-size:11px;line-height:1.8;margin:10px 0 0;padding-left:16px}.reconstruction-summary.ready{background:#e9f3e6}.text-toggle{margin-bottom:10px}@media(max-width:800px){.item>summary{gap:8px}.item-editor{padding:10px}.item-expand{font-size:8px}.item-name{font-size:11px}}
 
 .danger{border:1px solid #e2bdb6;background:#fff7f4;border-radius:7px;padding:12px 18px;color:#9a4234;font-size:12px;font-weight:600}.danger:hover{background:#fbe7e0}.danger:disabled{opacity:.5;cursor:wait}
+
+#fiscalStatus{display:block;font-size:10px;line-height:1.7;margin-top:7px}.fiscal-error{color:#9b5d2b}.fiscal-note{color:#617f60}.fiscal-pending{background:#fff0df;color:#906424}
 </style></head>
 <body><aside><a class="brand" href="#">rip<span>●</span></a><p class="brand-sub">Rastreador de<br>Inflação Pessoal</p><nav><button class="nav active" id="navPurchases">▤ <span>Minhas compras</span></button><button class="nav" id="navNew">＋ <span>Adicionar cupom</span></button></nav><div class="sidebar-bottom"><span class="private-dot"></span> Seus dados, seu histórico<p>Salvos neste navegador. Exporte backups.<br>Texto direto da nota fiscal.</p><small>VERSÃO TEXTO · 0.4</small></div></aside>
 <main><header><span>SEU CONSUMO, COM MAIS CLAREZA</span><span class="header-right">◉ Registro pessoal de preços</span></header><div id="notice" role="status" hidden></div><section id="listView"><div class="heading"><div><div class="eyebrow">CADA COMPRA CONTA UMA HISTÓRIA</div><h1>Minhas compras<span>.</span></h1><p>Um lugar para guardar seus cupons e acompanhar o que você paga.</p></div><button class="primary" id="newPurchase">＋ Adicionar cupom</button></div><div class="stats"><article><span>Compras registradas</span><strong id="count">0</strong><small>Seu histórico começa aqui</small></article><article><span>Total registrado</span><strong id="sum">R$ 0,00</strong><small>Compras registradas</small></article><article><span>Rascunhos</span><strong id="pending">0</strong><small>Compras ainda não concluídas</small></article></div><div class="backup-actions"><button class="secondary" id="exportBackup">Exportar backup</button><label class="secondary" style="cursor:pointer">Importar backup<input type="file" id="importBackup" accept="application/json,.json" hidden></label></div><div class="section-title"><h2>Seu histórico</h2><span id="historyCount">Todas as compras</span></div><div id="purchaseList"></div><div class="how"><div class="step-icon">↗</div><div><h3>Do cupom para o seu histórico</h3><p>Consulte a nota pelo QR code, copie o texto e cole aqui. Os valores são verificados automaticamente.</p></div><span>01 COLE &nbsp; → &nbsp; 02 COMPLETE &nbsp; → &nbsp; 03 GUARDE</span></div></section>
-<section id="editorView" hidden><button class="back" id="back">← Minhas compras</button><div class="heading"><div><div class="eyebrow">CONSTRUA SEU HISTÓRICO</div><h1 id="editorTitle">Adicionar cupom<span>.</span></h1><p>Cole o texto da nota e informe a data. O RIP verifica a importação automaticamente.</p></div><span class="badge" id="stateBadge">Rascunho</span></div><div class="workflow"><span class="selected">1. Texto do cupom</span><i></i><span>2. Completar dados</span><i></i><span>3. Salvar</span></div><div class="editor-grid"><div><article class="card"><details id="textDetails" open><summary class="text-toggle">Texto da nota · abrir para colar ou consultar</summary><div class="card-title"><h2>Texto do cupom</h2><span>Copiar → colar → importar</span></div><p class="hint">Na consulta da NFC-e, copie desde o nome do estabelecimento até o valor total. Cole abaixo, incluindo todos os produtos.</p><label for="receiptText">Conteúdo copiado da nota</label><textarea id="receiptText" rows="13" maxlength="500000" spellcheck="false" placeholder="Cole aqui o nome do estabelecimento, CNPJ, produtos, quantidades, unidades, preços e total…"></textarea><button class="primary full" id="process">Interpretar texto →</button><p class="hint">Sem imagens nem reconhecimento óptico. As unidades continuam sendo normalizadas (por exemplo, KG9 → KG e UND8 → UN).</p><p id="legacyNotice" class="hint" hidden>Esta compra veio de uma versão anterior. Os registros e anexos antigos foram preservados; não é necessário colar texto para manter a compra.</p></details></article><article class="card"><h2>Identificação da compra</h2><p class="hint">Nome e CNPJ são preenchidos a partir do texto do cabeçalho. Informe a data; complete os campos que não forem identificados.</p><div class="fields"><label class="wide">Estabelecimento<input id="store" placeholder="Ex.: Supermercado do bairro"></label><label>CNPJ do estabelecimento <small>(opcional)</small><input id="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"></label><label>Data da compra<input id="date" type="date"></label><label>Chave fiscal <small>(opcional)</small><input id="key" inputmode="numeric" placeholder="44 dígitos"></label></div></article><article class="card"><div class="card-title"><h2>Itens da compra</h2><button class="text-button" id="addItem">＋ Adicionar item</button></div><p class="hint">Os itens são importados do texto. Abra um item apenas para consultar seus detalhes ou ajustar uma pendência.</p><div id="reconstructionSummary" class="reconstruction-summary" hidden></div><div id="items"></div></article></div><div class="right-col"><article class="card summary"><span class="eyebrow">VALIDAÇÃO AUTOMÁTICA</span><h2>Resumo da compra</h2><div class="summary-row"><span>Soma dos itens</span><strong id="subtotal">R$ 0,00</strong></div><details id="adjustments" class="adjustments"><summary>Descontos e acréscimos</summary><p class="hint">Use apenas ajustes gerais da compra. Não repita descontos já aplicados nos itens.</p><label>Desconto geral (R$)<input id="discount" inputmode="decimal" value="0,00"></label><label>Acréscimos gerais (R$)<input id="extra" inputmode="decimal" value="0,00"></label></details><div class="summary-row calculated"><span>Total calculado</span><strong id="calculated">R$ 0,00</strong></div><label>Total da nota (R$)<input id="receiptTotal" inputmode="decimal" placeholder="Digite o total da nota"></label><div class="difference" id="difference">Total da nota ainda não identificado</div><p class="hint">O RIP verifica campos obrigatórios, contagem de itens quando informada e compatibilidade dos valores.</p><button class="primary full" id="confirm">Salvar compra</button><button class="secondary full" id="save">Salvar rascunho</button><button class="danger full" id="deletePurchase" hidden>Excluir nota salva</button><p class="hint">Rascunhos podem ser retomados a qualquer momento.</p></article><div class="privacy"><span>◇</span><div><strong>Direto do texto da nota</strong><p>O texto original fica vinculado à compra para consulta.</p></div></div></div></div></section></main><script>/* Parser de cupons: preserva valores observados, nunca inventa um total para fechar a conta. */
+<section id="editorView" hidden><button class="back" id="back">← Minhas compras</button><div class="heading"><div><div class="eyebrow">CONSTRUA SEU HISTÓRICO</div><h1 id="editorTitle">Adicionar cupom<span>.</span></h1><p>Cole o texto da nota e informe a data. O RIP verifica a importação automaticamente.</p></div><span class="badge" id="stateBadge">Rascunho</span></div><div class="workflow"><span class="selected">1. Texto do cupom</span><i></i><span>2. Completar dados</span><i></i><span>3. Salvar</span></div><div class="editor-grid"><div><article class="card"><details id="textDetails" open><summary class="text-toggle">Texto da nota · abrir para colar ou consultar</summary><div class="card-title"><h2>Texto do cupom</h2><span>Copiar → colar → importar</span></div><p class="hint">Na consulta da NFC-e, copie desde o nome do estabelecimento até o valor total. Cole abaixo, incluindo todos os produtos. Se incluir também o trecho “Chave de acesso”, o campo será preenchido; caso contrário, cole a chave separadamente abaixo.</p><label for="receiptText">Conteúdo copiado da nota</label><textarea id="receiptText" rows="13" maxlength="500000" spellcheck="false" placeholder="Cole aqui o nome do estabelecimento, CNPJ, produtos, quantidades, unidades, preços e total…"></textarea><button class="primary full" id="process">Interpretar texto →</button><p class="hint">Sem imagens nem reconhecimento óptico. As unidades continuam sendo normalizadas (por exemplo, KG9 → KG e UND8 → UN).</p><p id="legacyNotice" class="hint" hidden>Esta compra veio de uma versão anterior. Os registros e anexos antigos foram preservados; não é necessário colar texto para manter a compra.</p></details></article><article class="card"><h2>Identificação da compra</h2><p class="hint">Nome e CNPJ são preenchidos a partir do texto do cabeçalho. Informe a data; complete os campos que não forem identificados.</p><div class="fields"><label class="wide">Estabelecimento<input id="store" placeholder="Ex.: Supermercado do bairro"></label><label>CNPJ do estabelecimento <small>(opcional)</small><input id="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"></label><label>Data da compra<input id="date" type="date"></label><label class="wide">Chave de acesso da NFC-e <strong>(obrigatória)</strong><input id="key" inputmode="numeric" required autocomplete="off" placeholder="44 dígitos da chave de acesso" aria-describedby="fiscalStatus"><small id="fiscalStatus">Obrigatória para registrar. A validação local não comprova autenticidade na SEFAZ.</small></label></div></article><article class="card"><div class="card-title"><h2>Itens da compra</h2><button class="text-button" id="addItem">＋ Adicionar item</button></div><p class="hint">Os itens são importados do texto. Abra um item apenas para consultar seus detalhes ou ajustar uma pendência.</p><div id="reconstructionSummary" class="reconstruction-summary" hidden></div><div id="items"></div></article></div><div class="right-col"><article class="card summary"><span class="eyebrow">VALIDAÇÃO AUTOMÁTICA</span><h2>Resumo da compra</h2><div class="summary-row"><span>Soma dos itens</span><strong id="subtotal">R$ 0,00</strong></div><details id="adjustments" class="adjustments"><summary>Descontos e acréscimos</summary><p class="hint">Use apenas ajustes gerais da compra. Não repita descontos já aplicados nos itens.</p><label>Desconto geral (R$)<input id="discount" inputmode="decimal" value="0,00"></label><label>Acréscimos gerais (R$)<input id="extra" inputmode="decimal" value="0,00"></label></details><div class="summary-row calculated"><span>Total calculado</span><strong id="calculated">R$ 0,00</strong></div><label>Total da nota (R$)<input id="receiptTotal" inputmode="decimal" placeholder="Digite o total da nota"></label><div class="difference" id="difference">Total da nota ainda não identificado</div><p class="hint">O RIP verifica campos obrigatórios, contagem de itens quando informada e compatibilidade dos valores.</p><button class="primary full" id="confirm">Salvar compra</button><button class="secondary full" id="save">Salvar rascunho</button><button class="danger full" id="deletePurchase" hidden>Excluir nota salva</button><p class="hint">Rascunhos podem ser retomados a qualquer momento.</p></article><div class="privacy"><span>◇</span><div><strong>Direto do texto da nota</strong><p>O texto original fica vinculado à compra para consulta.</p></div></div></div></div></section></main><script>/* Parser de cupons: preserva valores observados, nunca inventa um total para fechar a conta. */
 (function(root){
   const money = /(?<![\d.,/])\d+(?:\.\d{3})*[,.]\d{1,2}(?![\d.,/])/g;
   const quantity = /\b(?:Qtde|Qtd|Qide|Qlde|Otde)\s*[.:;]*\s*(\d+(?:[.,]\d+)?)\b/i;
@@ -129,10 +131,31 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
     if(merchant.cnpjWarning)warnings.push(merchant.cnpjWarning);
     const globalDiscount=discountMatch(tail);
     const globalExtra=tail.match(new RegExp('\\bAcr[eé]scimos?(?:\\s+(?:gerais|geral|total))?\\s*(?:R\\s*\\$)?\\s*[:;]?\\s*'+amountPattern,'i'));
-    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj,discount:globalDiscount?normalizeMoney(globalDiscount[1]):undefined,extra:globalExtra?normalizeMoney(globalExtra[1]):undefined};
+    const key=text.match(/\bChave\s+de\s+acesso\s*[:;]?\s*((?:\d[\s.-]*){43}\d)(?![\s.-]*\d)/i)?.[1]?.replace(/\D/g,'');
+    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj,key,discount:globalDiscount?normalizeMoney(globalDiscount[1]):undefined,extra:globalExtra?normalizeMoney(globalExtra[1]):undefined};
   }
   root.ReceiptParser={parse,validCNPJ,formatCNPJ,normalizeUnit};
   if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ,normalizeUnit};
+})(globalThis);
+
+/* Validação estrutural da chave NFC-e. Não consulta nem autentica documentos na SEFAZ. */
+(function(root){
+ const states=new Set(['11','12','13','14','15','16','17','21','22','23','24','25','26','27','28','29','31','32','33','35','41','42','43','50','51','52','53']);
+ function normalize(value){const text=String(value??'').trim();return /^[\d\s.-]*$/.test(text)?text.replace(/\D/g,''):text}
+ function digit(base){let weight=2,sum=0;for(let n=base.length-1;n>=0;n--){sum+=Number(base[n])*weight;weight=weight===9?2:weight+1}const remainder=sum%11;return String(remainder<2?0:11-remainder)}
+ function inspect(value){
+  const key=normalize(value),fail=message=>({valid:false,key,message,authenticity:'not_checked'});
+  if(!key)return fail('Informe a chave de acesso da NFC-e para registrar a nota.');
+  if(!/^\d{44}$/.test(key))return fail('A chave de acesso deve conter 44 dígitos. Espaços, pontos e hífens de formatação são aceitos.');
+  if(!states.has(key.slice(0,2)))return fail('A chave contém um código de estado inválido.');
+  if(Number(key.slice(4,6))<1||Number(key.slice(4,6))>12)return fail('O mês de emissão da chave é inválido.');
+  if(key.slice(20,22)!=='65')return fail('A chave deve pertencer a uma NFC-e, modelo 65.');
+  if(!root.ReceiptParser.validCNPJ(key.slice(6,20)))return fail('O CNPJ do emitente contido na chave é inválido.');
+  if(digit(key.slice(0,43))!==key[43])return fail('O dígito verificador da chave não confere. Copie novamente da consulta.');
+  return {valid:true,key,cnpj:key.slice(6,20),state:key.slice(0,2),yearMonth:key.slice(2,6),model:'65',authenticity:'not_checked'};
+ }
+ root.ReceiptFiscal={normalize,digit,inspect};
+ if(typeof module!=='undefined')module.exports={normalize,digit,inspect};
 })(globalThis);
 
 /* Verificações automáticas: dados obrigatórios, itens importados e conciliação. */
@@ -153,6 +176,12 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
   if(!p.date)add('date','Informe a data da compra.');
   else if(!/^\d{4}-\d{2}-\d{2}$/.test(p.date)||Number.isNaN(Date.parse(p.date))||new Date(p.date).toISOString().slice(0,10)!==p.date)add('date','Informe uma data válida.');
   if(p.cnpj&&!root.ReceiptParser.validCNPJ(p.cnpj))add('cnpj','O CNPJ informado é inválido. Corrija-o ou deixe o campo vazio se não estiver disponível.');
+  const fiscal=root.ReceiptFiscal.inspect(p.key);
+  if(!fiscal.valid)add('key',fiscal.message);
+  else{
+   if(p.cnpj&&root.ReceiptParser.validCNPJ(p.cnpj)&&p.cnpj.replace(/\D/g,'')!==fiscal.cnpj)add('key','A chave pertence a outro CNPJ. Verifique a chave e o estabelecimento.');
+   if(p.date&&/^\d{4}-\d{2}-\d{2}$/.test(p.date)&&!Number.isNaN(Date.parse(p.date))&&new Date(p.date).toISOString().slice(0,10)===p.date&&p.date.slice(2,7).replace('-','')!==fiscal.yearMonth)add('key','O mês/ano da data da compra difere do mês/ano contido na chave.');
+  }
   const text=p.receiptText||'';
   if((p.parsedText&&text!==p.parsedText)||(!p.parsedText&&text.trim()))add('receiptText','O texto foi alterado. Selecione Interpretar texto para atualizar os itens.');
   if(!items.length)add('items','Importe pelo menos um item.');
@@ -177,7 +206,7 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
   const difference=total!==null&&receiptTotal!==null?total-receiptTotal:null;
   if(total!==null&&total<0)add('discount','O desconto geral é maior que o valor disponível.');
   if(difference!==null&&difference!==0)add('difference','A soma dos itens e ajustes difere do total da nota. Verifique texto incompleto, descontos ou acréscimos.');
-  return {ready:!issues.length,issues,subtotal:validAmounts?subtotal:null,total,difference,expectedCount:expected??null,itemCount:items.length};
+  return {ready:!issues.length,issues,subtotal:validAmounts?subtotal:null,total,difference,expectedCount:expected??null,itemCount:items.length,fiscal};
  }
  root.ReceiptValidation={validate,cents,lineTotal};
  if(typeof module!=='undefined')module.exports={validate,cents,lineTotal};
@@ -220,11 +249,12 @@ async function localAPI(path,body){
   if(path==='/api/purchases'&&!body)return (await readAll('purchases')).reverse();
   if(path==='/api/purchases'&&body){
     const p=structuredClone(body);if(p.status==='confirmed'){const checks=ReceiptValidation.validate(p);if(!checks.ready)throw Error(checks.issues.map(x=>x.message).join(' '))}p.id=p.id||crypto.randomUUID().replaceAll('-','');
-    const key=String(p.key||'').replace(/\D/g,'');
-    if(key&&key.length!==44)throw Error('A chave fiscal deve ter 44 dígitos ou ficar vazia.');
+    const key=ReceiptFiscal.normalize(p.key);
+    const fiscal=ReceiptFiscal.inspect(key);
+    p.fiscalValidation={keyStatus:fiscal.valid?'valid_format':key?'invalid':'missing',authenticity:'not_checked'};
     p.key=key;
     const all=await readAll('purchases');
-    if(key&&all.some(x=>x.id!==p.id&&x.key===key))throw Error('Já existe uma compra com esta chave fiscal.');
+    if(fiscal.valid&&all.some(x=>x.id!==p.id&&ReceiptFiscal.normalize(x.key)===key))throw Error('Já existe uma compra com esta chave fiscal.');
     const previous=all.find(x=>x.id===p.id);p.history=previous?.history||[];
     if(previous){const snapshot=structuredClone(previous);delete snapshot.history;p.history.push(snapshot)}
     p.updated=new Date().toISOString();await writeLocal('purchases',p);return p;
@@ -248,7 +278,7 @@ function lineCents(q,p){const a=fraction(q),b=fraction(p);return a&&b?rounded(a[
 function notify(s,error=false){$('notice').textContent=s;$('notice').className=error?'error':'';$('notice').hidden=false;$('notice').scrollIntoView({block:'nearest',behavior:'smooth'})}
 async function api(path,body){return localAPI(path,body)}
 
-function renderList(){const confirmed=purchases.filter(p=>p.status==='confirmed');$('count').textContent=purchases.length;$('pending').textContent=purchases.length-confirmed.length;$('sum').textContent=money(confirmed.reduce((s,p)=>s+cents(p.receiptTotal),0));$('historyCount').textContent=`${purchases.length} ${purchases.length===1?'compra':'compras'}`;$('purchaseList').innerHTML=purchases.length?purchases.map(p=>`<button class="purchase" data-open="${esc(p.id)}"><span class="receipt-icon">▤</span><div><h3>${esc(p.store||'Compra sem identificação')}</h3><p>${esc(p.date?p.date.split('-').reverse().join('/'):'Data não informada')} · ${p.items.length} itens</p></div><span class="amount">${Number.isFinite(cents(p.receiptTotal))?money(cents(p.receiptTotal)):'Total pendente'}</span><span class="badge ${p.status==='confirmed'?'confirmed':''}">${p.status==='confirmed'?'Registrada':'Rascunho'}</span><span>↗</span></button>`).join(''):`<div class="empty"><div class="empty-icon">▤</div><h3>Seu primeiro cupom é o começo.</h3><p>Guarde os preços de hoje para entender suas compras de amanhã. Comece colando o texto de um cupom.</p><button class="primary" id="emptyAdd">＋ Adicionar primeiro cupom</button></div>`;document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>edit(purchases.find(p=>p.id===b.dataset.open)));if($('emptyAdd'))$('emptyAdd').onclick=()=>edit()}
+function renderList(){const confirmed=purchases.filter(p=>p.status==='confirmed');$('count').textContent=purchases.length;$('pending').textContent=purchases.length-confirmed.length;$('sum').textContent=money(confirmed.reduce((s,p)=>s+cents(p.receiptTotal),0));$('historyCount').textContent=`${purchases.length} ${purchases.length===1?'compra':'compras'}`;$('purchaseList').innerHTML=purchases.length?purchases.map(p=>`<button class="purchase" data-open="${esc(p.id)}"><span class="receipt-icon">▤</span><div><h3>${esc(p.store||'Compra sem identificação')}</h3><p>${esc(p.date?p.date.split('-').reverse().join('/'):'Data não informada')} · ${p.items.length} itens</p></div><span class="amount">${Number.isFinite(cents(p.receiptTotal))?money(cents(p.receiptTotal)):'Total pendente'}</span><span class="badge ${p.status==='confirmed'?'confirmed':''}">${p.status==='confirmed'?'Registrada':'Rascunho'}</span>${!ReceiptFiscal.inspect(p.key).valid?'<span class="badge fiscal-pending">Chave pendente</span>':''}<span>↗</span></button>`).join(''):`<div class="empty"><div class="empty-icon">▤</div><h3>Seu primeiro cupom é o começo.</h3><p>Guarde os preços de hoje para entender suas compras de amanhã. Comece colando o texto de um cupom.</p><button class="primary" id="emptyAdd">＋ Adicionar primeiro cupom</button></div>`;document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>edit(purchases.find(p=>p.id===b.dataset.open)));if($('emptyAdd'))$('emptyAdd').onclick=()=>edit()}
 
 function snapshot(){const p={...purchase};for(const k of ['store','cnpj','date','key','discount','extra','receiptTotal'])p[k]=$(k).value;p.receiptText=$('receiptText').value;return p}
 function renderItems(){
@@ -262,6 +292,9 @@ function renderItems(){
 }
 function totals(){
  const r=ReceiptValidation.validate(snapshot());
+ const keyIssue=r.issues.find(x=>x.field==='key');
+ $('fiscalStatus').textContent=keyIssue?keyIssue.message:'Formato e dígito verificador válidos. Autenticidade ainda não consultada na SEFAZ.';
+ $('fiscalStatus').className=keyIssue?'fiscal-error':'fiscal-note';
  $('subtotal').textContent=r.subtotal===null?'Total indisponível':money(r.subtotal);
  $('calculated').textContent=r.total===null?'—':money(r.total);
  const live=$('liveTotals');if(live)live.textContent=`Soma: ${r.subtotal===null?'—':money(r.subtotal)} · Diferença: ${r.difference===null?'indisponível':money(r.difference)}`;
@@ -284,6 +317,7 @@ function totals(){
 function collect(){
   for(const k of ['store','cnpj','date','key','discount','extra','receiptTotal'])purchase[k]=$(k).value;
   delete purchase.reviewed;
+  purchase.key=ReceiptFiscal.normalize(purchase.key);
   purchase.receiptText=$('receiptText').value;
   return purchase;
 }
@@ -333,7 +367,7 @@ function interpretText(){
   purchase.inputMethod='text';purchase.itemsEdited=false;
   purchase.analysis={warnings:analysis.warnings,expectedCount:analysis.expectedCount};
   purchase.autoFields=purchase.autoFields||{};
-  for(const k of ['store','cnpj','receiptTotal','discount','extra']){
+  for(const k of ['store','cnpj','receiptTotal','discount','extra','key']){
     const value=analysis[k]??((['discount','extra'].includes(k)&&purchase.autoFields[k]!==undefined)?'0,00':undefined);
     if(value!==undefined&&value!==''&&!purchase.manualFields?.[k]&&(!$(k).value.trim()||purchase.autoFields[k]!==undefined||(['discount','extra'].includes(k)&&cents($(k).value)===0))){$(k).value=value;purchase.autoFields[k]=value}
   }
@@ -347,6 +381,7 @@ async function save(confirmed){
   collect();
   const checks=totals();
   if(confirmed&&!checks.ready){notify(checks.issues.filter(x=>x.index===null).map(x=>x.message).join(' ')||'Complete os campos pendentes nos itens destacados.',true);return}
+  if(confirmed)purchase.fiscalValidation={keyStatus:'valid_format',authenticity:'not_checked',cnpj:checks.fiscal.cnpj,yearMonth:checks.fiscal.yearMonth};
   if(confirmed)purchase.validation={method:'automatic',checkedAt:new Date().toISOString(),itemCount:checks.itemCount,expectedCount:checks.expectedCount,difference:checks.difference};
   purchase.status=confirmed?'confirmed':'draft';busy=true;
   try{purchase=await api('/api/purchases',purchase);dirty=false;busy=false;await list();notify(confirmed?'Compra registrada no seu histórico.':'Rascunho salvo. Você pode continuar depois.')}
@@ -374,4 +409,10 @@ async function removePurchase(){
  finally{busy=false;$('deletePurchase').disabled=false}
 }
 $('deletePurchase').onclick=removePurchase;
+
+$('key').onblur=()=>{
+ const result=ReceiptFiscal.inspect($('key').value);$('key').value=ReceiptFiscal.normalize($('key').value);
+ if(result.valid&&!$('cnpj').value.trim()&&!purchase.manualFields?.cnpj)$('cnpj').value=ReceiptParser.formatCNPJ(result.cnpj);
+ totals();
+};
 </script></body></html>

@@ -51,6 +51,42 @@ def cents(value):
     return int((number(value) * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
 
+def valid_cnpj(value):
+    digits = re.sub(r'\D', '', str(value or ''))
+    if len(digits) != 14 or len(set(digits)) == 1:
+        return False
+    def check(part):
+        weights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] if len(part) == 12 else [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        remainder = sum(int(x) * w for x, w in zip(part, weights)) % 11
+        return str(0 if remainder < 2 else 11 - remainder)
+    return digits[12] == check(digits[:12]) and digits[13] == check(digits[:13])
+
+
+def normalize_fiscal_key(value):
+    raw = str(value or '').strip()
+    return re.sub(r'\D', '', raw) if re.fullmatch(r'[\d\s.-]*', raw) else raw
+
+
+def inspect_fiscal_key(value):
+    key = normalize_fiscal_key(value)
+    failure = lambda message: {'valid': False, 'key': key, 'message': message, 'authenticity': 'not_checked'}
+    if not key:
+        return failure('Informe a chave de acesso da NFC-e para registrar a nota.')
+    if not re.fullmatch(r'[0-9]{44}', key):
+        return failure('A chave de acesso deve conter 44 dígitos.')
+    states = {'11', '12', '13', '14', '15', '16', '17', '21', '22', '23', '24', '25', '26', '27', '28', '29', '31', '32', '33', '35', '41', '42', '43', '50', '51', '52', '53'}
+    if key[:2] not in states or not 1 <= int(key[4:6]) <= 12:
+        return failure('O estado ou mês de emissão contido na chave é inválido.')
+    if key[20:22] != '65':
+        return failure('A chave deve pertencer a uma NFC-e, modelo 65.')
+    if not valid_cnpj(key[6:20]):
+        return failure('O CNPJ do emitente contido na chave é inválido.')
+    remainder = sum(int(digit) * (2 + index % 8) for index, digit in enumerate(reversed(key[:43]))) % 11
+    if int(key[43]) != (0 if remainder < 2 else 11 - remainder):
+        return failure('O dígito verificador da chave não confere.')
+    return {'valid': True, 'key': key, 'cnpj': key[6:20], 'yearMonth': key[2:6], 'state': key[:2], 'authenticity': 'not_checked'}
+
+
 def reconcile(p):
     items = p.get('items', [])
     if not items:
@@ -75,6 +111,9 @@ def reconcile(p):
 
 
 def validate_purchase(p):
+    fiscal = inspect_fiscal_key(p.get('key'))
+    if not fiscal['valid']:
+        raise ValueError(fiscal['message'])
     result = reconcile(p)
     if result['difference'] != 0:
         raise ValueError('A soma dos itens e ajustes difere do total da nota.')
@@ -93,13 +132,12 @@ def validate_purchase(p):
     if (parsed and text != parsed) or (text.strip() and not parsed):
         raise ValueError('Interprete o texto alterado antes de salvar a compra.')
     cnpj = re.sub(r'\D', '', p.get('cnpj', ''))
-    if p.get('cnpj'):
-        def check(part):
-            weights = ([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] if len(part) == 12 else [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
-            remainder = sum(int(x) * w for x, w in zip(part, weights)) % 11
-            return str(0 if remainder < 2 else 11 - remainder)
-        if len(cnpj) != 14 or len(set(cnpj)) == 1 or cnpj[12] != check(cnpj[:12]) or cnpj[13] != check(cnpj[:13]):
-            raise ValueError('O CNPJ informado é inválido.')
+    if p.get('cnpj') and not valid_cnpj(p['cnpj']):
+        raise ValueError('O CNPJ informado é inválido.')
+    if cnpj and cnpj != fiscal['cnpj']:
+        raise ValueError('A chave pertence a outro CNPJ.')
+    if p['date'][2:7].replace('-', '') != fiscal['yearMonth']:
+        raise ValueError('O mês/ano da compra difere do contido na chave.')
     return result
 
 
@@ -184,17 +222,18 @@ class Handler(SimpleHTTPRequestHandler):
                 ident = p.get('id') or uuid.uuid4().hex
                 if not re.fullmatch(r'[a-f0-9]{32}', ident):
                     raise ValueError('Identificação inválida.')
+                p['key'] = normalize_fiscal_key(p.get('key'))
+                fiscal = inspect_fiscal_key(p['key'])
                 if p['status'] == 'confirmed':
                     validate_purchase(p)
-                key = re.sub(r'\D', '', p.get('key', ''))
-                if key and len(key) != 44:
-                    raise ValueError('A chave fiscal deve ter 44 dígitos ou ficar vazia.')
+                key = p['key']
                 p['key'] = key
                 p['id'] = ident
+                p['fiscalValidation'] = {'keyStatus': 'valid_format' if fiscal['valid'] else 'invalid' if key else 'missing', 'authenticity': 'not_checked'}
                 with db() as c:
                     for row in c.execute('SELECT body FROM purchases WHERE id != ?', (ident,)):
                         old = json.loads(row[0])
-                        if key and old.get('key') == key:
+                        if fiscal['valid'] and normalize_fiscal_key(old.get('key')) == key:
                             raise ValueError('Já existe uma compra com esta chave fiscal.')
                     previous = c.execute('SELECT body FROM purchases WHERE id=?', (ident,)).fetchone()
                     history = json.loads(previous[0]).get('history', []) if previous else []
@@ -202,7 +241,7 @@ class Handler(SimpleHTTPRequestHandler):
                         snapshot = json.loads(previous[0]); snapshot.pop('history', None)
                         history.append(snapshot)
                     p['history'] = history
-                    c.execute('INSERT INTO purchases(id,body,store,purchase_date,status,receipt_total_cents,fiscal_key) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,store=excluded.store,purchase_date=excluded.purchase_date,status=excluded.status,receipt_total_cents=excluded.receipt_total_cents,fiscal_key=excluded.fiscal_key,updated=CURRENT_TIMESTAMP', (ident, json.dumps(p, ensure_ascii=False), p.get('store'), p.get('date'), p['status'], optional_cents(p.get('receiptTotal')), key or None))
+                    c.execute('INSERT INTO purchases(id,body,store,purchase_date,status,receipt_total_cents,fiscal_key) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,store=excluded.store,purchase_date=excluded.purchase_date,status=excluded.status,receipt_total_cents=excluded.receipt_total_cents,fiscal_key=excluded.fiscal_key,updated=CURRENT_TIMESTAMP', (ident, json.dumps(p, ensure_ascii=False), p.get('store'), p.get('date'), p['status'], optional_cents(p.get('receiptTotal')), key if fiscal['valid'] else None))
                     c.execute('DELETE FROM purchase_items WHERE purchase_id=?', (ident,))
                     for n, item in enumerate(p.get('items', [])):
                         c.execute('INSERT INTO purchase_items VALUES(?,?,?,?,?,?,?,?,?)', (ident, n, item.get('description', ''), str(item.get('quantity', '')), item.get('unit'), str(item.get('unitPrice', '')), optional_cents(item.get('discount')), optional_cents(item.get('total')), item.get('source')))
