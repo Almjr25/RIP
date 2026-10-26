@@ -10,6 +10,16 @@ Use **Exportar backup** regularmente. O arquivo JSON contém compras e imagens e
 
 Para regerar após alterar a interface: `python3 scripts/build_portable.py`. O teste `tests/portable_smoke.py` abre o HTML em um servidor **somente de arquivos estáticos**, sem API de aplicação: o Chromium gerenciado do ambiente bloqueia `file://` por política. A abertura direta por duplo clique precisa ser confirmada no navegador do usuário.
 
+### Leitura e conferência (desktop 0.2)
+
+O usuário não precisa produzir um texto em formato especial. O leitor aceita blocos de produto com código, `Qtde.`, `UN`, `Vl. Unit.` e total na coluna direita, inclusive quando `Vl. Total` aparece ao lado do nome antes da quantidade. A captura é ampliada e tem o contraste ajustado antes do OCR; a imagem original é preservada. Valores ausentes ficam para revisão, sem preencher o total pelo resultado de quantidade × preço. O total geral identificado é apenas uma sugestão e exige conferência.
+
+Se nenhum item aparecer, abra **Imagem …: conferir texto e reconstruir**, corrija caracteres ilegíveis no campo de texto e selecione **Reconstruir itens deste texto**. Também é possível **Reler imagem com OCR** ou adicionar itens manualmente. A reconstrução substitui somente os itens daquela imagem, mediante confirmação quando houver itens existentes; não apaga os de outras imagens nem duplica silenciosamente. Se nenhum bloco for encontrado, os itens anteriores são preservados. O texto original e o texto corrigido são guardados separadamente nos rascunhos e backups.
+
+Após a extração, confira os itens, preencha estabelecimento e data e verifique a diferença em relação ao total do cupom. Avisos por item mostram campos ausentes ou contas inconsistentes. Marque a revisão e confirme somente quando os dados estiverem corretos.
+
+Testes: `node tests/receipt.test.js` valida oito cenários do parser. `python3 tests/column_ocr_smoke.py` usa OCR real em uma captura sintética anônima no layout de colunas (10 itens, R$ 151,28), verifica reconstrução sem duplicação e confirmação persistida. Esses testes não usam a imagem original do usuário e não garantem precisão em qualquer captura.
+
 ## Executar
 
 Requisitos: Python 3.12+, Tesseract 5 e modelo de idioma português. Linux: pacote `tesseract-ocr` (o modelo português pode ser instalado com `tesseract-ocr-por`).

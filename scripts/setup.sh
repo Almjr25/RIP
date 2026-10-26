@@ -14,3 +14,6 @@ if [ ! -f .data/tessdata/por.traineddata ]; then
 fi
 echo 'c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb  .data/tessdata/por.traineddata' | sha256sum -c -
 .data/venv/bin/python -m unittest discover -s tests -v
+if command -v node >/dev/null; then
+    node tests/receipt.test.js
+fi
