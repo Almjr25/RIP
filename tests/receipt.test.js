@@ -80,3 +80,37 @@ test('captura sem cabeçalho não inventa estabelecimento',()=>{
  const footerOnly=parse('ARROZ 2 UN x 7,50 15,00\nValor a pagar R$: 15,00\nCONSUMIDOR\nCNPJ: 11.222.333/0001-81','a');
  assert.equal(footerOnly.store,'');assert.equal(footerOnly.cnpj,'');
 });
+
+test('unidades comerciais não ficam restritas a UN e KG',()=>{
+ for(const u of ['PCT','PCT9','UND9','CX','FD','PAR','DZ','M2','SC25']){
+  const r=parse(`PRODUTO TESTE (Código: 1) Vl. Total\nQtde.: 1 UN: ${u} Vl. Unit.: 8,49 8,49`,'a');
+  assert.equal(r.items[0].unit,u);assert.equal(r.items[0].unitPrice,'8,49');assert.equal(r.items[0].total,'8,49');
+ }
+});
+test('rótulo de preço colado à unidade não elimina os valores',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1) VI.\nTotal\nQtde.: 1 UN: UND9VI. Unit.: 8,49 8,49','a');
+ assert.deepEqual([r.items[0].description,r.items[0].unit,r.items[0].unitPrice,r.items[0].total],['PRODUTO TESTE','UND9','8,49','8,49']);
+ assert.equal(r.warnings.length,0);
+});
+test('uma casa decimal é preservada e completada com zero',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1) VI.\nTotal\nQtde.: 1 UN: UND9VI. Unit.: 15,9 15,90','a');
+ assert.equal(r.items[0].unitPrice,'15,90');assert.equal(r.items[0].total,'15,90');
+ const s=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: PCT Vl. Unit.: 3,9 3,9','a');
+ assert.equal(s.items[0].total,'3,90');
+});
+test('vírgulas ausentes ou trocadas por barra não são adivinhadas',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 5 UN: PCT9VI. Unit.: 759 5/95','a');
+ assert.equal(r.items[0].quantity,'5');assert.equal(r.items[0].unit,'PCT9');
+ assert.equal(r.items[0].unitPrice,'');assert.equal(r.items[0].total,'');
+ assert.match(r.warnings.join(' '),/não adivinha/);
+});
+test('valores colados e ambíguos não viram um preço aparentemente válido',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: UND9VI. Unit.: 8,498,49','a');
+ assert.equal(r.items[0].unitPrice,'');assert.equal(r.items[0].total,'');
+});
+test('preço com milhar e casas adicionais permanece íntegro',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: CX Vl. Unit.: 1.234,56 1.234,56','a');
+ assert.equal(r.items[0].unitPrice,'1.234,56');assert.equal(r.items[0].total,'1.234,56');
+ const s=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: KG Vl. Unit.: 8,4999 8,50','a');
+ assert.equal(s.items[0].unitPrice,'8,4999');assert.equal(s.items[0].total,'8,50');
+});

@@ -73,3 +73,9 @@ O teste de OCR deve ser feito também com capturas reais dos portais utilizados:
 ### Estabelecimento automático
 
 O cabeçalho do OCR preenche nome e CNPJ numérico do estabelecimento, mantendo ambos editáveis e sem sobrescrever campos já preenchidos. O CNPJ só é sugerido quando seus dígitos verificadores conferem; se estiver ilegível ou inválido, fica vazio com aviso para conferência. O campo é opcional para preservar compras antigas e capturas sem cabeçalho. A data permanece manual. Esses dados acompanham compras, rascunhos e backups.
+
+### Unidades comerciais e pontuação no OCR
+
+O parser aceita códigos comerciais de unidade de até seis caracteres (como PCT, PCT9, UND9, CX e FD), sem convertê-los automaticamente para UN ou KG. Ele também lê o rótulo de preço quando está colado à unidade e separa Vl. Total quando há quebra de linha. Um valor como 15,9 é preservado numericamente como 15,90. Leituras ambíguas sem separador decimal, como 759, ou com barra, como 5/95, ficam em branco para conferência: o app não adivinha casas decimais para fechar o total.
+
+Para aplicar essas regras a uma compra já extraída, abra o texto da imagem e use Reconstruir itens deste texto. O app pede confirmação antes de substituir os itens daquela imagem; salve um backup antes de reconstruir uma compra com correções manuais importantes.
