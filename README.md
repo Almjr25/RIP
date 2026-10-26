@@ -2,6 +2,14 @@
 
 Primeira versão para registrar compras de supermercado a partir de uma ou várias capturas de tela. OCR gratuito com Tesseract no servidor, revisão humana, conferência de totais e persistência SQL (SQLite). Não usa APIs externas para ler imagens.
 
+## Publicação estática na Vercel
+
+Importe `Almjr25/RIP` pelo GitHub. Nas configurações do projeto, use **Framework Preset: Other**, **Root Directory: raiz do repositório** (não `web`), branch de produção `main`. Remova overrides antigos de build/output/install para respeitar `vercel.json`. O build é `node scripts/build_portable.mjs --vercel` e a pasta publicada é `dist`. Não são necessárias variáveis, credenciais de OCR, Python, banco remoto ou dependências npm.
+
+O build recompõe a interface a partir dos fontes atuais, sem depender do HTML pré-gerado estar atualizado. O arquivo `.vercelignore` exclui o backend Python e os dados pessoais do envio. Apenas `dist/index.html` e `dist/icon.svg` são publicados; arquivos pessoais em `.data/` e fontes do servidor não fazem parte do site. O comando `node scripts/build_portable.mjs` gera o HTML desktop; Node 20+ é necessário para gerar os artefatos, não para usar o app.
+
+Após o push, confirme em **Deployments** se o commit mais recente chegou a **Ready** e foi associado ao domínio de produção. Se o projeto foi configurado com outra pasta ou comandos manuais, ajuste-os e execute **Redeploy**. Teste abrir a página, importar uma captura e confirmar uma compra. O OCR continua no navegador e requer conexão para carregar os componentes. O site ainda não sincroniza dados entre dispositivos. Para migrar do HTML, exporte um backup nele e importe no site; os armazenamentos são separados por origem.
+
 ## Versão desktop em um HTML
 
 Baixe `RIP.html` e abra com Chrome ou Edge no computador, sem instalar Python ou iniciar servidor. Esta versão adapta a mesma interface para armazenamento no IndexedDB do navegador e OCR local com Tesseract.js. Para OCR, mantenha acesso à internet: biblioteca, worker, WebAssembly e modelo português são baixados de `cdn.jsdelivr.net`. As compras e imagens não são enviadas ao CDN. O preenchimento manual e a revisão não precisam do OCR.

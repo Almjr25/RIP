@@ -6,17 +6,20 @@ import sys
 import time
 import atexit
 import urllib.request
+import os
 from PIL import Image, ImageDraw, ImageFont
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
+STATIC_ROOT = Path(os.environ.get('RIP_STATIC_DIR', ROOT))
+PAGE_PATH = os.environ.get('RIP_STATIC_PATH', '/RIP.html')
 # O Chromium gerenciado deste ambiente bloqueia file:// por política.
 # Sirva apenas arquivos estáticos para testar a mesma aplicação sem backend.
-server = subprocess.Popen([sys.executable, '-m', 'http.server', '8003', '--bind', '127.0.0.1', '--directory', str(ROOT)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+server = subprocess.Popen([sys.executable, '-m', 'http.server', '8003', '--bind', '127.0.0.1', '--directory', str(STATIC_ROOT)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 atexit.register(server.terminate)
 for _ in range(50):
     try:
-        urllib.request.urlopen('http://127.0.0.1:8003/RIP.html', timeout=1)
+        urllib.request.urlopen('http://127.0.0.1:8003'+PAGE_PATH, timeout=1)
         break
     except OSError:
         time.sleep(.1)
@@ -33,10 +36,12 @@ with tempfile.TemporaryDirectory(prefix='rip-html-') as temp, sync_playwright() 
     browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
     page = browser.new_page(accept_downloads=True)
     errors = []
+    backend_requests = []
+    page.on('request', lambda request: backend_requests.append(request.url) if '/api/' in request.url else None)
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('requestfailed',lambda request: print('REDE:',request.url,request.failure,flush=True))
     page.on('dialog', lambda dialog: dialog.accept())
-    page.goto('http://127.0.0.1:8003/RIP.html')
+    page.goto('http://127.0.0.1:8003'+PAGE_PATH)
     page.locator('#newPurchase').click()
     page.locator('#files').set_input_files(paths)
     page.locator('.thumb').nth(1).wait_for()
@@ -75,5 +80,6 @@ with tempfile.TemporaryDirectory(prefix='rip-html-') as temp, sync_playwright() 
     assert page.locator('#stateBadge').inner_text() == 'Conferida'
     page.screenshot(path='/tmp/rip-html.png', full_page=True)
     assert not errors, errors
+    assert not backend_requests, backend_requests
     browser.close()
     print('PASS: HTML estático sem API/backend, dois prints, OCR real em português no navegador, IndexedDB, divergência bloqueada, confirmação, exportação e restauração de backup completo.')
