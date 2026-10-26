@@ -59,7 +59,8 @@ with tempfile.TemporaryDirectory(prefix='rip-html-') as temp, sync_playwright() 
     page.locator('[data-edit-text]').first.fill('ARROZ (Código: 123) VI.\nTotal\nQtde.: 2 UN: PCT9VI. Unit.: /,5 15,00')
     page.locator('[data-rebuild]').first.click()
     assert page.locator('.item').count()==2
-    assert page.locator('[data-field="unit"]').last.input_value()=='PCT9'
+    assert page.locator('[data-field="unit"]').last.input_value()=='PCT'
+    assert page.evaluate('purchase.items.at(-1).unitRaw')=='PCT9'
     assert page.locator('[data-field="unitPrice"]').last.input_value()==''
     page.locator('[data-suggestion-item]').click()
     assert page.locator('[data-field="unitPrice"]').last.input_value()=='7,50'

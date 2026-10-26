@@ -76,7 +76,7 @@ O cabeçalho do OCR preenche nome e CNPJ numérico do estabelecimento, mantendo 
 
 ### Unidades comerciais e pontuação no OCR
 
-O parser aceita códigos comerciais de unidade de até seis caracteres (como PCT, PCT9, UND9, CX e FD), sem convertê-los automaticamente para UN ou KG. Ele também lê o rótulo de preço quando está colado à unidade e separa Vl. Total quando há quebra de linha. Um valor como 15,9 é preservado numericamente como 15,90. Leituras ambíguas sem separador decimal, como 759, ou com barra, como 5/95, ficam em branco para conferência: o app não adivinha casas decimais para fechar o total.
+O parser normaliza unidades reconhecidas: KG9 → KG; UND, UND8 e UND9 → UN; PCT8/PCT9 → PCT; BDJ9 → BDJ; FRC9 → FRC. A lista também inclui unidades usuais de massa, volume, embalagens e dimensões. Códigos legítimos como M2/M3 são reconhecidos antes da remoção dos sufixos observados 8/9; números arbitrários não são apagados. Unidade desconhecida fica vazia e sinalizada para revisão. O campo unitRaw, o texto original e os backups preservam a unidade de origem. A interface mostra a unidade original ao lado do resultado normalizado. Ele também lê o rótulo de preço, inclusive VIL. produzido pelo OCR, quando está colado à unidade e separa Vl. Total quando há quebra de linha. Um valor como 15,9 é preservado numericamente como 15,90. Leituras ambíguas sem separador decimal, como 759, ou com barra, como 5/95, ficam em branco para conferência: o app não adivinha casas decimais para fechar o total.
 
 Para aplicar essas regras a uma compra já extraída, abra o texto da imagem e use Reconstruir itens deste texto. O app pede confirmação antes de substituir os itens daquela imagem; salve um backup antes de reconstruir uma compra com correções manuais importantes.
 

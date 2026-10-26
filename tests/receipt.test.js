@@ -82,14 +82,14 @@ test('captura sem cabeçalho não inventa estabelecimento',()=>{
 });
 
 test('unidades comerciais não ficam restritas a UN e KG',()=>{
- for(const u of ['PCT','PCT9','UND9','CX','FD','PAR','DZ','M2','SC25']){
+ for(const u of ['PCT','CX','FD','PAR','DZ','M2','M3','BDJ','FRC']){
   const r=parse(`PRODUTO TESTE (Código: 1) Vl. Total\nQtde.: 1 UN: ${u} Vl. Unit.: 8,49 8,49`,'a');
   assert.equal(r.items[0].unit,u);assert.equal(r.items[0].unitPrice,'8,49');assert.equal(r.items[0].total,'8,49');
  }
 });
 test('rótulo de preço colado à unidade não elimina os valores',()=>{
  const r=parse('PRODUTO TESTE (Código: 1) VI.\nTotal\nQtde.: 1 UN: UND9VI. Unit.: 8,49 8,49','a');
- assert.deepEqual([r.items[0].description,r.items[0].unit,r.items[0].unitPrice,r.items[0].total],['PRODUTO TESTE','UND9','8,49','8,49']);
+ assert.deepEqual([r.items[0].description,r.items[0].unit,r.items[0].unitPrice,r.items[0].total],['PRODUTO TESTE','UN','8,49','8,49']);
  assert.equal(r.warnings.length,0);
 });
 test('uma casa decimal é preservada e completada com zero',()=>{
@@ -100,7 +100,7 @@ test('uma casa decimal é preservada e completada com zero',()=>{
 });
 test('vírgulas ausentes ou trocadas por barra não são adivinhadas',()=>{
  const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 5 UN: PCT9VI. Unit.: 759 5/95','a');
- assert.equal(r.items[0].quantity,'5');assert.equal(r.items[0].unit,'PCT9');
+ assert.equal(r.items[0].quantity,'5');assert.equal(r.items[0].unit,'PCT');
  assert.equal(r.items[0].unitPrice,'');assert.equal(r.items[0].total,'');
  assert.match(r.warnings.join(' '),/não adivinha/);
 });
@@ -131,5 +131,31 @@ test('não inventa uma vírgula junto com a troca de barra por 7',()=>{
 });
 test('barras de descrição, unidade ou código não são corrigidas',()=>{
  const r=parse('PRODUTO 1/2 (Código: 12/34)\nQtde.: 1 UN: KG/L Vl. Unit.: 8,49 8,49','a');
- const i=r.items[0];assert.deepEqual(i.ocrSuggestions,[]);assert.equal(i.unit,'KG/L');assert.equal(i.productCode,'12/34');assert.equal(i.description,'PRODUTO 1/2');
+ const i=r.items[0];assert.deepEqual(i.ocrSuggestions,[]);assert.equal(i.unit,'');assert.equal(i.unitRaw,'KG/L');assert.equal(i.productCode,'12/34');assert.equal(i.description,'PRODUTO 1/2');
+});
+
+test('normaliza os sufixos observados nos cupons sem alterar números de compra',()=>{
+ for(const [raw,expected] of [['KG9','KG'],['UND8','UN'],['UND9','UN'],['PCT8','PCT'],['PCT9','PCT'],['BDJ9','BDJ'],['FRC9','FRC']]){
+  const r=parse(`PRODUTO TESTE (Código: 12089)\nQtde.: 0,544 UN: ${raw}Vl. Unit.: 42,9 23,34`,'a');
+  const i=r.items[0];assert.equal(i.unit,expected);assert.equal(i.unitRaw,raw);assert.equal(i.unitNormalization,'suffix');
+  assert.equal(i.quantity,'0,544');assert.equal(i.unitPrice,'42,90');assert.equal(i.total,'23,34');assert.equal(i.productCode,'12089');
+ }
+});
+test('aliases conhecidos usam unidade canônica e códigos dimensionais são preservados',()=>{
+ const {normalizeUnit}=require('../web/receipt.js');
+ for(const [raw,expected] of [['UND','UN'],['UNID','UN'],['LT','L'],['PAC','PCT'],['M2','M2'],['M3','M3'],['CM','CM']]){
+  assert.equal(normalizeUnit(raw).value,expected);
+ }
+});
+test('unidade desconhecida não é aceita por prefixo nem truncada',()=>{
+ for(const raw of ['KGABC','KG7','SC25','XYZ9','KG/L','UND9Y']){
+  const r=parse(`PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: ${raw} Vl. Unit.: 8,49 8,49`,'a');
+  const i=r.items[0];assert.equal(i.unit,'');assert.equal(i.unitRaw,raw);assert.equal(i.unitNormalization,'unknown');
+  assert.match(r.warnings.join(' '),/não reconhecida/);
+ }
+});
+
+test('VIL. colado à unidade é tratado como rótulo e não como unidade',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 2 UN: UND9VIL. Unit.: 6,99 13,98','a');
+ const i=r.items[0];assert.equal(i.unitRaw,'UND9');assert.equal(i.unit,'UN');assert.equal(i.unitPrice,'6,99');assert.equal(i.total,'13,98');
 });

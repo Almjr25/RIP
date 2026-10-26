@@ -14,14 +14,31 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
   const code = /[([]?\s*C[oó0]d(?:igo)?\s*[.:;]\s*([^\s)\]]+)\s*[)\]]?/i;
   // O rótulo pode vir colado à unidade (ex.: UND9VI. Unit.).
   // Sem separador decimal, 759 não é transformado em 7,59 nem aceito como R$ 759.
-  const price = /V[lI1!][.,]?\s*Unit[.,]?\s*[:;]?\s*(\d+(?:\.\d{3})*[,.]\d{1,4})(?![\d.,/])/i;
-  const totalLabel = /\bV[lI1!][.,]?\s*Total\s*[:;]?/ig;
-  // uCom pode ser um código comercial, não apenas UN/KG. Preserve o que foi lido.
-  const unit = /\bUN\s*[:;]\s*([A-Z0-9./%-]{1,6}?)(?=\s*V[lI1!][.,]?\s*Unit|\s|$)/i;
+  const price = /V[lI1!]{1,2}[.,]?\s*Unit[.,]?\s*[:;]?\s*(\d+(?:\.\d{3})*[,.]\d{1,4})(?![\d.,/])/i;
+  const totalLabel = /\bV[lI1!]{1,2}[.,]?\s*Total\s*[:;]?/ig;
+  const unit = /\bUN\s*[:;]\s*([A-Z0-9./%-]{1,16}?)(?=\s*V[lI1!]{1,2}[.,]?\s*Unit|\s|$)/i;
+  const unitAliases={
+    UN:'UN',UND:'UN',UNID:'UN',UNIDADE:'UN',UNIDADES:'UN',
+    KG:'KG',KGS:'KG',QUILO:'KG',QUILOS:'KG',G:'G',GR:'G',GRAMA:'G',MG:'MG',
+    L:'L',LT:'L',LTS:'L',LITRO:'L',LITROS:'L',ML:'ML',
+    PCT:'PCT',PCTE:'PCT',PAC:'PCT',PACOTE:'PCT',CX:'CX',CAIXA:'CX',FD:'FD',FARDO:'FD',
+    BDJ:'BDJ',BANDEJA:'BDJ',FRC:'FRC',FR:'FRC',FRASCO:'FRC',
+    PC:'PC',PCS:'PC',PAR:'PAR',DZ:'DZ',DUZIA:'DZ',SC:'SC',SACO:'SC',
+    RL:'RL',ROLO:'RL',M:'M',M2:'M2',M3:'M3',CM:'CM',MM:'MM',GAL:'GAL'
+  };
+  function normalizeUnit(value){
+    const raw=String(value||'').trim(),key=raw.toUpperCase().replace(/\.$/,'');
+    // Primeiro reconheça códigos legítimos com números, como M2 e M3.
+    if(Object.hasOwn(unitAliases,key))return {raw,value:unitAliases[key],method:key===unitAliases[key]?'exact':'alias'};
+    // Sufixos 8/9 observados nos cupons. Não remova números arbitrários de códigos desconhecidos.
+    const base=key.replace(/[89]$/,'');
+    if(base!==key&&Object.hasOwn(unitAliases,base))return {raw,value:unitAliases[base],method:'suffix'};
+    return {raw,value:'',method:'unknown'};
+  }
   const normalizeMoney = value => {if(!value)return '';const normalized=value.includes(',')?value:value.replace(/\.(\d{1,4})$/,',$1');return normalized.replace(/,(\d)$/,(_,digit)=>','+digit+'0')};
   function slashCorrections(block,qm,cm,item){
     const suggestions=[];
-    const rawPrice=block.match(/V[lI1!][.,]?\s*Unit[.,]?\s*[:;]?\s*([\d/]+(?:[.,][\d/]+)?)/i);
+    const rawPrice=block.match(/V[lI1!]{1,2}[.,]?\s*Unit[.,]?\s*[:;]?\s*([\d/]+(?:[.,][\d/]+)?)/i);
     const candidate=(field,raw)=>{
       if(!raw?.includes('/')||!/[.,]/.test(raw))return;
       const fixed=raw.replaceAll('/','7');
@@ -42,7 +59,7 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
   }
   const stripTotalLabel=(line,next='')=>{
     let cleaned=line.replace(totalLabel,'');
-    if(/^Total\b/i.test(next.trim()))cleaned=cleaned.replace(/\bV[lI1!][.,]?\s*$/i,'');
+    if(/^Total\b/i.test(next.trim()))cleaned=cleaned.replace(/\bV[lI1!]{1,2}[.,]?\s*$/i,'');
     return cleaned;
   };
   const footer = /(?:[QO]t[de.]*\s*\.?\s*total\s+de\s+itens|Valor\s+a\s+pagar|Forma\s+de\s+pagamento|Informa[çc][õo]es\s+gerais|EMISS[ÃA]O\s+NORMAL|Chave\s+de\s+acesso)/i;
@@ -74,7 +91,10 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
     const end=lines.findIndex(x=>footer.test(x));
     const body=end<0?lines:lines.slice(0,end);
     const items=[], warnings=[];
-    const make=(description,q,u,p,t,raw,productCode='')=>({id:globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random(),description,quantity:q||'',unit:u||'',unitPrice:normalizeMoney(p),discount:'0,00',total:normalizeMoney(t),source,rawText:raw,productCode});
+    const make=(description,q,u,p,t,raw,productCode='')=>{
+      const normalized=normalizeUnit(u);
+      return {id:globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random(),description,quantity:q||'',unit:normalized.value,unitRaw:normalized.raw,unitNormalization:normalized.method,unitPrice:normalizeMoney(p),discount:'0,00',total:normalizeMoney(t),source,rawText:raw,productCode};
+    };
     // Layout compacto que já era suportado, sem exigir que o usuário o produza.
     const compact=/^(.*?)\s+(\d+(?:[.,]\d+)?)\s*(KG|UN|UND|L|LT|G|ML|PC)?\s*[xX×]\s*(\d+(?:\.\d{3})*[,.]\d{2})\s*(?:=|\s)\s*(\d+(?:\.\d{3})*[,.]\d{2})\s*$/i;
     const used=new Set();
@@ -106,10 +126,11 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
       });
       const total=tokens.length?tokens[tokens.length-1][0]:'';
       const item=make(desc,qm?.[1],um?.[1]?.toUpperCase(),pm?.[1],total,block,cm?.[1]||'');
+      if(item.unitRaw&&!item.unit)warnings.push(`Unidade “${item.unitRaw}” não reconhecida em “${desc}”. Confira a imagem e informe uma unidade válida.`);
       item.ocrSuggestions=slashCorrections(block,qm,cm,item);
       if(item.ocrSuggestions.length)warnings.push(`Há possível confusão entre / e 7 em “${desc}”. Veja as sugestões no item e confirme na imagem.`);
       if(!item.quantity||!item.unit||!item.unitPrice||!item.total)warnings.push(`Confira os campos incompletos de “${desc}”.`);
-      if(!item.unitPrice&&/V[lI1!][.,]?\s*Unit/i.test(block))warnings.push(`O preço unitário de “${desc}” não tem uma leitura decimal segura. Confira a vírgula no cupom; o RIP não adivinha casas decimais.`);
+      if(!item.unitPrice&&/V[lI1!]{1,2}[.,]?\s*Unit/i.test(block))warnings.push(`O preço unitário de “${desc}” não tem uma leitura decimal segura. Confira a vírgula no cupom; o RIP não adivinha casas decimais.`);
       items.push(item);
     });
     const tail=end<0?'':lines.slice(end).join('\n');
@@ -121,8 +142,8 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
     if(merchant.cnpjWarning)warnings.push(merchant.cnpjWarning);
     return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj};
   }
-  root.ReceiptParser={parse,validCNPJ,formatCNPJ};
-  if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ};
+  root.ReceiptParser={parse,validCNPJ,formatCNPJ,normalizeUnit};
+  if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ,normalizeUnit};
 })(globalThis);
 
 // Adaptador local. Nenhuma imagem ou compra é enviada à rede.
@@ -163,7 +184,7 @@ async function list(){if(busy)return;try{purchases=await api('/api/purchases');$
 function openImage(url){$('fullImage').src=url;$('imageDialog').showModal()}
 function renderImages(){$('imageCount').textContent=`${images.length} ${images.length===1?'imagem':'imagens'}`;$('images').innerHTML=images.map((im,n)=>`<div class="thumb"><img src="${esc(im.url)}" alt="Captura ${n+1}" data-preview="${n}"><small>${n+1}. ${esc(im.name)}</small><div class="thumb-controls"><button aria-label="Mover captura ${n+1} para cima" data-up="${n}" ${n===0?'disabled':''}>←</button><button aria-label="Remover captura ${n+1}" data-remove="${n}">Remover</button></div></div>`).join('');document.querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>openImage(images[+b.dataset.preview].url));document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{if(busy)return;const n=+b.dataset.up;[images[n-1],images[n]]=[images[n],images[n-1]];invalidate();renderImages()});document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{if(busy)return;const im=images[+b.dataset.remove];if(im.server&&purchase.items.some(i=>i.source===im.server)){notify('Esta imagem é a origem de itens. Remova esses itens antes de remover a captura.',true);return}images.splice(+b.dataset.remove,1);invalidate();renderImages()});renderOCRTexts()}
 async function addFiles(files){if(busy)return;for(const f of files){if(!['image/png','image/jpeg','image/webp'].includes(f.type)){notify('Use imagens PNG, JPG ou WebP.',true);continue}if(f.size>15*1024*1024){notify('Cada imagem pode ter até 15 MB.',true);continue}const url=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f)});if(images.some(i=>i.url===url)){notify('Esta imagem já foi adicionada.',true);continue}images.push({name:f.name,url})}invalidate();renderImages();$('files').value=''}
-function renderItems(){$('items').innerHTML=purchase.items.length?purchase.items.map((i,n)=>{const dup=purchase.items.some((j,k)=>k!==n&&j.description.toLowerCase()===i.description.toLowerCase()&&j.total===i.total);return `<div class="item"><div class="item-top"><span>${String(n+1).padStart(2,'0')}</span><input aria-label="Descrição do item ${n+1}" data-index="${n}" data-field="description" value="${esc(i.description)}" placeholder="Descrição do produto"><button class="remove" data-delete="${n}" aria-label="Excluir item ${n+1}">×</button></div><div class="item-fields">${[['quantity','Quantidade'],['unit','Unidade'],['unitPrice','Preço unitário (R$)'],['discount','Desconto item (R$)'],['total','Total item (R$)']].map(([k,label])=>`<label>${label}<input aria-label="${label} do item ${n+1}" data-index="${n}" data-field="${k}" value="${esc(i[k])}" ${k!=='unit'?'inputmode="decimal"':''}></label>`).join('')}</div>${dup?'<p class="item-warning">⚠ Possível repetição. Confira a sequência nas imagens antes de excluir.</p>':''}<div class="ocr-suggestions">${(i.ocrSuggestions||[]).map((suggestion,k)=>i[suggestion.field]?'':`<p class="item-warning">OCR: “${esc(suggestion.original)}”. A barra pode ser um 7; confira na imagem.</p><button class="secondary" data-suggestion-item="${n}" data-suggestion="${k}">Conferi: usar ${esc(suggestion.value)} como ${suggestion.field==='unitPrice'?'preço unitário':'total do item'}</button>`).join('')}</div><p class="item-warning item-check" hidden></p><div class="item-source"><span>${i.source?'Extraído da captura · revisão obrigatória':'Item inserido manualmente'}</span>${i.source?`<button class="text-button" data-source="${esc(i.source)}">Ver imagem de origem ↗</button>`:''}</div></div>`}).join(''):'<p class="hint">Nenhum item ainda. Extraia as imagens ou adicione os itens manualmente.</p>';document.querySelectorAll('[data-field]').forEach(input=>input.oninput=()=>{purchase.items[+input.dataset.index][input.dataset.field]=input.value;invalidate();totals()});document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{purchase.items.splice(+b.dataset.delete,1);invalidate();renderItems();totals()});document.querySelectorAll('[data-suggestion-item]').forEach(b=>b.onclick=()=>{const i=purchase.items[+b.dataset.suggestionItem],suggestion=i.ocrSuggestions[+b.dataset.suggestion];if(i[suggestion.field]){notify('O campo já foi preenchido. Sua edição foi preservada.');return}i[suggestion.field]=suggestion.value;suggestion.accepted=true;invalidate();renderItems();totals()});document.querySelectorAll('[data-source]').forEach(b=>b.onclick=()=>openImage(imageURLs.get(b.dataset.source)))}
+function renderItems(){$('items').innerHTML=purchase.items.length?purchase.items.map((i,n)=>{const dup=purchase.items.some((j,k)=>k!==n&&j.description.toLowerCase()===i.description.toLowerCase()&&j.total===i.total);return `<div class="item"><div class="item-top"><span>${String(n+1).padStart(2,'0')}</span><input aria-label="Descrição do item ${n+1}" data-index="${n}" data-field="description" value="${esc(i.description)}" placeholder="Descrição do produto"><button class="remove" data-delete="${n}" aria-label="Excluir item ${n+1}">×</button></div><div class="item-fields">${[['quantity','Quantidade'],['unit','Unidade'],['unitPrice','Preço unitário (R$)'],['discount','Desconto item (R$)'],['total','Total item (R$)']].map(([k,label])=>`<label>${label}<input aria-label="${label} do item ${n+1}" data-index="${n}" data-field="${k}" value="${esc(i[k])}" ${k!=='unit'?'inputmode="decimal"':''}></label>`).join('')}</div>${dup?'<p class="item-warning">⚠ Possível repetição. Confira a sequência nas imagens antes de excluir.</p>':''}${i.unitRaw&&i.unitRaw!==i.unit?`<p class="${i.unitNormalization==='unknown'?'item-warning':'hint'}">Unidade original: ${esc(i.unitRaw)}${i.unit?` → ${esc(i.unit)}`:' · não reconhecida; preencha o campo acima.'}</p>`:''}<div class="ocr-suggestions">${(i.ocrSuggestions||[]).map((suggestion,k)=>i[suggestion.field]?'':`<p class="item-warning">OCR: “${esc(suggestion.original)}”. A barra pode ser um 7; confira na imagem.</p><button class="secondary" data-suggestion-item="${n}" data-suggestion="${k}">Conferi: usar ${esc(suggestion.value)} como ${suggestion.field==='unitPrice'?'preço unitário':'total do item'}</button>`).join('')}</div><p class="item-warning item-check" hidden></p><div class="item-source"><span>${i.source?'Extraído da captura · revisão obrigatória':'Item inserido manualmente'}</span>${i.source?`<button class="text-button" data-source="${esc(i.source)}">Ver imagem de origem ↗</button>`:''}</div></div>`}).join(''):'<p class="hint">Nenhum item ainda. Extraia as imagens ou adicione os itens manualmente.</p>';document.querySelectorAll('[data-field]').forEach(input=>input.oninput=()=>{purchase.items[+input.dataset.index][input.dataset.field]=input.value;invalidate();totals()});document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{purchase.items.splice(+b.dataset.delete,1);invalidate();renderItems();totals()});document.querySelectorAll('[data-suggestion-item]').forEach(b=>b.onclick=()=>{const i=purchase.items[+b.dataset.suggestionItem],suggestion=i.ocrSuggestions[+b.dataset.suggestion];if(i[suggestion.field]){notify('O campo já foi preenchido. Sua edição foi preservada.');return}i[suggestion.field]=suggestion.value;suggestion.accepted=true;invalidate();renderItems();totals()});document.querySelectorAll('[data-source]').forEach(b=>b.onclick=()=>openImage(imageURLs.get(b.dataset.source)))}
 async function processImages(){if(busy)return;const pending=images.filter(i=>!i.processed);if(!pending.length){notify(images.length?'Todas as imagens já foram processadas. Adicione novas capturas se necessário.':'Adicione pelo menos uma imagem.',true);return}busy=true;$('process').disabled=true;$('save').disabled=true;$('confirm').disabled=true;try{for(let n=0;n<pending.length;n++){const im=pending[n];$('progress').textContent=`Lendo imagem ${n+1} de ${pending.length}… Aguarde, sem fechar esta página.`;const r=await api('/api/ocr',im.server?{source:im.server}:{image:im.url});const analysis=ReceiptParser.parse(r.text,r.image);r.items=analysis.items;im.analysis=analysis;delete im.editedText;if(im.replaceOnRead){if(r.items.length)purchase.items=purchase.items.filter(i=>i.source!==im.server);else analysis.warnings.push('A releitura não encontrou itens. Os itens anteriores desta imagem foram preservados.');delete im.replaceOnRead}applyReceiptSuggestion(analysis);im.server=r.image;im.text=r.text;im.processed=true;im.url=imageURLs.get(r.image);purchase.items.push(...r.items);invalidate();renderImages();renderItems();totals()}$('progress').textContent='Extração concluída. Confira os itens abaixo e o total ao lado.';notify(purchase.items.length?`${purchase.items.length} itens reconstruídos. Confira os campos abaixo, confira estabelecimento e CNPJ, informe a data e compare o total.`:'Nenhum item reconstruído. Abra o texto da imagem abaixo, corrija os rótulos ou números ilegíveis e clique em Reconstruir itens deste texto. Você também pode usar Adicionar item.',!purchase.items.length);$('items').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){notify(e.message+' As imagens anteriores continuam disponíveis; tente novamente para continuar.',true)}finally{busy=false;$('process').disabled=false;$('save').disabled=false;$('confirm').disabled=false}}
 async function save(confirmed){if(busy)return;collect();if(confirmed&&purchase.cnpj.trim()&&!ReceiptParser.validCNPJ(purchase.cnpj)){notify('Confira o CNPJ: os dígitos verificadores não conferem. Corrija-o ou deixe o campo vazio se não estiver legível.',true);return}if(confirmed&&images.some(i=>!i.processed)){notify('Processe ou remova as imagens pendentes antes de confirmar.',true);return}if(confirmed){const t=totals();if(!purchase.items.length||!t.valid||t.diff!==0||t.issues||!purchase.reviewed||!purchase.store.trim()||!purchase.date){notify('Confira os itens, informe estabelecimento e data, zere a diferença e marque a revisão antes de confirmar.',true);return}}purchase.status=confirmed?'confirmed':'draft';busy=true;try{for(const im of images.filter(i=>!i.server)){const r=await api('/api/images',{image:im.url});im.server=r.image;im.url=imageURLs.get(r.image)}collect();purchase.status=confirmed?'confirmed':'draft';purchase=await api('/api/purchases',purchase);busy=false;await list();notify(confirmed?'Compra conferida e salva no seu histórico.':'Rascunho salvo. Você pode continuar a revisão depois.')}catch(e){notify(e.message,true)}finally{busy=false}}
 for(const id of ['newPurchase','navNew'])$(id).onclick=()=>{if(!busy)edit()};for(const id of ['back','navPurchases'])$(id).onclick=()=>{if($('editorView').hidden||confirm('Sair da edição? Alterações não salvas serão perdidas.'))list()};$('files').onchange=e=>addFiles(e.target.files);$('drop').ondragover=e=>e.preventDefault();$('drop').ondrop=e=>{e.preventDefault();addFiles(e.dataTransfer.files)};$('process').onclick=processImages;$('addItem').onclick=()=>{purchase.items.push({id:crypto.randomUUID().replaceAll('-',''),description:'',quantity:'1',unit:'UN',unitPrice:'0,00',discount:'0,00',total:'0,00'});invalidate();renderItems();totals()};for(const k of ['store','cnpj','date','key','discount','extra','receiptTotal'])$(k).oninput=()=>{invalidate();totals()};$('reviewed').onchange=()=>{purchase.reviewed=$('reviewed').checked};$('save').onclick=()=>save(false);$('confirm').onclick=()=>save(true);$('closeImage').onclick=()=>$('imageDialog').close();window.addEventListener('beforeunload',e=>{if(!$('editorView').hidden){e.preventDefault();e.returnValue=''}});const live=document.createElement('button');live.id='liveTotals';live.onclick=()=>document.querySelector('.summary').scrollIntoView({behavior:'smooth'});$('editorView').appendChild(live);list();

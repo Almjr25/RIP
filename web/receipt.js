@@ -5,14 +5,31 @@
   const code = /[([]?\s*C[oó0]d(?:igo)?\s*[.:;]\s*([^\s)\]]+)\s*[)\]]?/i;
   // O rótulo pode vir colado à unidade (ex.: UND9VI. Unit.).
   // Sem separador decimal, 759 não é transformado em 7,59 nem aceito como R$ 759.
-  const price = /V[lI1!][.,]?\s*Unit[.,]?\s*[:;]?\s*(\d+(?:\.\d{3})*[,.]\d{1,4})(?![\d.,/])/i;
-  const totalLabel = /\bV[lI1!][.,]?\s*Total\s*[:;]?/ig;
-  // uCom pode ser um código comercial, não apenas UN/KG. Preserve o que foi lido.
-  const unit = /\bUN\s*[:;]\s*([A-Z0-9./%-]{1,6}?)(?=\s*V[lI1!][.,]?\s*Unit|\s|$)/i;
+  const price = /V[lI1!]{1,2}[.,]?\s*Unit[.,]?\s*[:;]?\s*(\d+(?:\.\d{3})*[,.]\d{1,4})(?![\d.,/])/i;
+  const totalLabel = /\bV[lI1!]{1,2}[.,]?\s*Total\s*[:;]?/ig;
+  const unit = /\bUN\s*[:;]\s*([A-Z0-9./%-]{1,16}?)(?=\s*V[lI1!]{1,2}[.,]?\s*Unit|\s|$)/i;
+  const unitAliases={
+    UN:'UN',UND:'UN',UNID:'UN',UNIDADE:'UN',UNIDADES:'UN',
+    KG:'KG',KGS:'KG',QUILO:'KG',QUILOS:'KG',G:'G',GR:'G',GRAMA:'G',MG:'MG',
+    L:'L',LT:'L',LTS:'L',LITRO:'L',LITROS:'L',ML:'ML',
+    PCT:'PCT',PCTE:'PCT',PAC:'PCT',PACOTE:'PCT',CX:'CX',CAIXA:'CX',FD:'FD',FARDO:'FD',
+    BDJ:'BDJ',BANDEJA:'BDJ',FRC:'FRC',FR:'FRC',FRASCO:'FRC',
+    PC:'PC',PCS:'PC',PAR:'PAR',DZ:'DZ',DUZIA:'DZ',SC:'SC',SACO:'SC',
+    RL:'RL',ROLO:'RL',M:'M',M2:'M2',M3:'M3',CM:'CM',MM:'MM',GAL:'GAL'
+  };
+  function normalizeUnit(value){
+    const raw=String(value||'').trim(),key=raw.toUpperCase().replace(/\.$/,'');
+    // Primeiro reconheça códigos legítimos com números, como M2 e M3.
+    if(Object.hasOwn(unitAliases,key))return {raw,value:unitAliases[key],method:key===unitAliases[key]?'exact':'alias'};
+    // Sufixos 8/9 observados nos cupons. Não remova números arbitrários de códigos desconhecidos.
+    const base=key.replace(/[89]$/,'');
+    if(base!==key&&Object.hasOwn(unitAliases,base))return {raw,value:unitAliases[base],method:'suffix'};
+    return {raw,value:'',method:'unknown'};
+  }
   const normalizeMoney = value => {if(!value)return '';const normalized=value.includes(',')?value:value.replace(/\.(\d{1,4})$/,',$1');return normalized.replace(/,(\d)$/,(_,digit)=>','+digit+'0')};
   function slashCorrections(block,qm,cm,item){
     const suggestions=[];
-    const rawPrice=block.match(/V[lI1!][.,]?\s*Unit[.,]?\s*[:;]?\s*([\d/]+(?:[.,][\d/]+)?)/i);
+    const rawPrice=block.match(/V[lI1!]{1,2}[.,]?\s*Unit[.,]?\s*[:;]?\s*([\d/]+(?:[.,][\d/]+)?)/i);
     const candidate=(field,raw)=>{
       if(!raw?.includes('/')||!/[.,]/.test(raw))return;
       const fixed=raw.replaceAll('/','7');
@@ -33,7 +50,7 @@
   }
   const stripTotalLabel=(line,next='')=>{
     let cleaned=line.replace(totalLabel,'');
-    if(/^Total\b/i.test(next.trim()))cleaned=cleaned.replace(/\bV[lI1!][.,]?\s*$/i,'');
+    if(/^Total\b/i.test(next.trim()))cleaned=cleaned.replace(/\bV[lI1!]{1,2}[.,]?\s*$/i,'');
     return cleaned;
   };
   const footer = /(?:[QO]t[de.]*\s*\.?\s*total\s+de\s+itens|Valor\s+a\s+pagar|Forma\s+de\s+pagamento|Informa[çc][õo]es\s+gerais|EMISS[ÃA]O\s+NORMAL|Chave\s+de\s+acesso)/i;
@@ -65,7 +82,10 @@
     const end=lines.findIndex(x=>footer.test(x));
     const body=end<0?lines:lines.slice(0,end);
     const items=[], warnings=[];
-    const make=(description,q,u,p,t,raw,productCode='')=>({id:globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random(),description,quantity:q||'',unit:u||'',unitPrice:normalizeMoney(p),discount:'0,00',total:normalizeMoney(t),source,rawText:raw,productCode});
+    const make=(description,q,u,p,t,raw,productCode='')=>{
+      const normalized=normalizeUnit(u);
+      return {id:globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random(),description,quantity:q||'',unit:normalized.value,unitRaw:normalized.raw,unitNormalization:normalized.method,unitPrice:normalizeMoney(p),discount:'0,00',total:normalizeMoney(t),source,rawText:raw,productCode};
+    };
     // Layout compacto que já era suportado, sem exigir que o usuário o produza.
     const compact=/^(.*?)\s+(\d+(?:[.,]\d+)?)\s*(KG|UN|UND|L|LT|G|ML|PC)?\s*[xX×]\s*(\d+(?:\.\d{3})*[,.]\d{2})\s*(?:=|\s)\s*(\d+(?:\.\d{3})*[,.]\d{2})\s*$/i;
     const used=new Set();
@@ -97,10 +117,11 @@
       });
       const total=tokens.length?tokens[tokens.length-1][0]:'';
       const item=make(desc,qm?.[1],um?.[1]?.toUpperCase(),pm?.[1],total,block,cm?.[1]||'');
+      if(item.unitRaw&&!item.unit)warnings.push(`Unidade “${item.unitRaw}” não reconhecida em “${desc}”. Confira a imagem e informe uma unidade válida.`);
       item.ocrSuggestions=slashCorrections(block,qm,cm,item);
       if(item.ocrSuggestions.length)warnings.push(`Há possível confusão entre / e 7 em “${desc}”. Veja as sugestões no item e confirme na imagem.`);
       if(!item.quantity||!item.unit||!item.unitPrice||!item.total)warnings.push(`Confira os campos incompletos de “${desc}”.`);
-      if(!item.unitPrice&&/V[lI1!][.,]?\s*Unit/i.test(block))warnings.push(`O preço unitário de “${desc}” não tem uma leitura decimal segura. Confira a vírgula no cupom; o RIP não adivinha casas decimais.`);
+      if(!item.unitPrice&&/V[lI1!]{1,2}[.,]?\s*Unit/i.test(block))warnings.push(`O preço unitário de “${desc}” não tem uma leitura decimal segura. Confira a vírgula no cupom; o RIP não adivinha casas decimais.`);
       items.push(item);
     });
     const tail=end<0?'':lines.slice(end).join('\n');
@@ -112,6 +133,6 @@
     if(merchant.cnpjWarning)warnings.push(merchant.cnpjWarning);
     return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj};
   }
-  root.ReceiptParser={parse,validCNPJ,formatCNPJ};
-  if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ};
+  root.ReceiptParser={parse,validCNPJ,formatCNPJ,normalizeUnit};
+  if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ,normalizeUnit};
 })(globalThis);
