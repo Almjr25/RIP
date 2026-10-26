@@ -79,3 +79,7 @@ O cabeçalho do OCR preenche nome e CNPJ numérico do estabelecimento, mantendo 
 O parser aceita códigos comerciais de unidade de até seis caracteres (como PCT, PCT9, UND9, CX e FD), sem convertê-los automaticamente para UN ou KG. Ele também lê o rótulo de preço quando está colado à unidade e separa Vl. Total quando há quebra de linha. Um valor como 15,9 é preservado numericamente como 15,90. Leituras ambíguas sem separador decimal, como 759, ou com barra, como 5/95, ficam em branco para conferência: o app não adivinha casas decimais para fechar o total.
 
 Para aplicar essas regras a uma compra já extraída, abra o texto da imagem e use Reconstruir itens deste texto. O app pede confirmação antes de substituir os itens daquela imagem; salve um backup antes de reconstruir uma compra com correções manuais importantes.
+
+### Possível confusão entre barra e 7
+
+Em preços e totais com separador decimal preservado, o parser pode oferecer uma sugestão de trocar / por 7 (ex.: /,59 → 7,59). O campo não é preenchido automaticamente: o usuário confere a imagem e usa o botão de aceitação. O texto original e a sugestão aceita ficam preservados. Não há substituição global em datas, CNPJ, unidades ou códigos. Se também faltar a vírgula, como em 5/95, não há sugestão automática de valor.

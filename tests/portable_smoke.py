@@ -56,10 +56,12 @@ with tempfile.TemporaryDirectory(prefix='rip-html-') as temp, sync_playwright() 
     assert page.locator('.item').count() == 2, page.locator('#notice').inner_text()+' '+page.locator('#progress').inner_text()
     # Reinterpretar uma imagem preserva a outra e aceita código de unidade colado ao rótulo.
     page.locator('#ocrTexts > details').first.evaluate('(el)=>el.open=true')
-    page.locator('[data-edit-text]').first.fill('ARROZ (Código: 123) VI.\nTotal\nQtde.: 2 UN: PCT9VI. Unit.: 7,5 15,00')
+    page.locator('[data-edit-text]').first.fill('ARROZ (Código: 123) VI.\nTotal\nQtde.: 2 UN: PCT9VI. Unit.: /,5 15,00')
     page.locator('[data-rebuild]').first.click()
     assert page.locator('.item').count()==2
     assert page.locator('[data-field="unit"]').last.input_value()=='PCT9'
+    assert page.locator('[data-field="unitPrice"]').last.input_value()==''
+    page.locator('[data-suggestion-item]').click()
     assert page.locator('[data-field="unitPrice"]').last.input_value()=='7,50'
     assert page.locator('[data-field="total"]').last.input_value()=='15,00'
     page.locator('#store').fill('Mercado HTML')

@@ -10,6 +10,27 @@
   // uCom pode ser um código comercial, não apenas UN/KG. Preserve o que foi lido.
   const unit = /\bUN\s*[:;]\s*([A-Z0-9./%-]{1,6}?)(?=\s*V[lI1!][.,]?\s*Unit|\s|$)/i;
   const normalizeMoney = value => {if(!value)return '';const normalized=value.includes(',')?value:value.replace(/\.(\d{1,4})$/,',$1');return normalized.replace(/,(\d)$/,(_,digit)=>','+digit+'0')};
+  function slashCorrections(block,qm,cm,item){
+    const suggestions=[];
+    const rawPrice=block.match(/V[lI1!][.,]?\s*Unit[.,]?\s*[:;]?\s*([\d/]+(?:[.,][\d/]+)?)/i);
+    const candidate=(field,raw)=>{
+      if(!raw?.includes('/')||!/[.,]/.test(raw))return;
+      const fixed=raw.replaceAll('/','7');
+      const pattern=field==='unitPrice'?/^\d+(?:\.\d{3})*[,.]\d{1,4}$/:/^\d+(?:\.\d{3})*[,.]\d{1,2}$/;
+      if(pattern.test(fixed))suggestions.push({field,original:raw,value:normalizeMoney(fixed),reason:'O OCR pode ter lido 7 como /. Confira na imagem antes de usar.'});
+    };
+    if(!item.unitPrice&&rawPrice)candidate('unitPrice',rawPrice[1]);
+    if(!item.total){
+      const candidates=[...block.matchAll(/(?<![\d.,/])[\d/]+(?:\.[\d/]{3})*[,.][\d/]{1,4}(?![\d.,/])/g)].filter(m=>{
+        const a=m.index,b=a+m[0].length;
+        if(qm&&a>=qm.index&&b<=qm.index+qm[0].length)return false;
+        if(rawPrice&&a>=rawPrice.index&&b<=rawPrice.index+rawPrice[0].length)return false;
+        return a>=(cm?cm.index+cm[0].length:(qm?qm.index:block.length));
+      });
+      candidate('total',candidates.at(-1)?.[0]);
+    }
+    return suggestions;
+  }
   const stripTotalLabel=(line,next='')=>{
     let cleaned=line.replace(totalLabel,'');
     if(/^Total\b/i.test(next.trim()))cleaned=cleaned.replace(/\bV[lI1!][.,]?\s*$/i,'');
@@ -76,6 +97,8 @@
       });
       const total=tokens.length?tokens[tokens.length-1][0]:'';
       const item=make(desc,qm?.[1],um?.[1]?.toUpperCase(),pm?.[1],total,block,cm?.[1]||'');
+      item.ocrSuggestions=slashCorrections(block,qm,cm,item);
+      if(item.ocrSuggestions.length)warnings.push(`Há possível confusão entre / e 7 em “${desc}”. Veja as sugestões no item e confirme na imagem.`);
       if(!item.quantity||!item.unit||!item.unitPrice||!item.total)warnings.push(`Confira os campos incompletos de “${desc}”.`);
       if(!item.unitPrice&&/V[lI1!][.,]?\s*Unit/i.test(block))warnings.push(`O preço unitário de “${desc}” não tem uma leitura decimal segura. Confira a vírgula no cupom; o RIP não adivinha casas decimais.`);
       items.push(item);

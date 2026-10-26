@@ -114,3 +114,22 @@ test('preço com milhar e casas adicionais permanece íntegro',()=>{
  const s=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: KG Vl. Unit.: 8,4999 8,50','a');
  assert.equal(s.items[0].unitPrice,'8,4999');assert.equal(s.items[0].total,'8,50');
 });
+
+test('barra no lugar de 7 gera sugestão sem preencher campos',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: PCT Vl. Unit.: /,59 /,59','a');
+ const i=r.items[0];assert.equal(i.unitPrice,'');assert.equal(i.total,'');
+ assert.deepEqual(i.ocrSuggestions.map(s=>[s.field,s.original,s.value]),[['unitPrice','/,59','7,59'],['total','/,59','7,59']]);
+ assert.ok(i.rawText.includes('/,59'));assert.match(r.warnings.join(' '),/confusão/);
+});
+test('barra em qualquer posição decimal pode sugerir 7',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: PCT Vl. Unit.: 3/,9/ 3/,9/','a');
+ assert.deepEqual(r.items[0].ocrSuggestions.map(s=>s.value),['37,97','37,97']);
+});
+test('não inventa uma vírgula junto com a troca de barra por 7',()=>{
+ const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 5 UN: PCT9Vl. Unit.: 759 5/95','a');
+ assert.deepEqual(r.items[0].ocrSuggestions,[]);assert.equal(r.items[0].unitPrice,'');assert.equal(r.items[0].total,'');
+});
+test('barras de descrição, unidade ou código não são corrigidas',()=>{
+ const r=parse('PRODUTO 1/2 (Código: 12/34)\nQtde.: 1 UN: KG/L Vl. Unit.: 8,49 8,49','a');
+ const i=r.items[0];assert.deepEqual(i.ocrSuggestions,[]);assert.equal(i.unit,'KG/L');assert.equal(i.productCode,'12/34');assert.equal(i.description,'PRODUTO 1/2');
+});
