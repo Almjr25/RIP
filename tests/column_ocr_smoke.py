@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(prefix='rip-columns-') as temp, sync_playwright
     draw.rectangle((21,7,530,690),fill='white')
     blue='#5298cf'
     draw.text((170,15),'Supermercado de teste',font=bold,fill=blue)
-    draw.text((180,36),'CNPJ: 00.000.000/0000-00',font=font,fill='black')
+    draw.text((180,36),'CNPJ: 11.222.333/0001-81',font=font,fill='black')
     for n,(name,qty,unit,price,total) in enumerate(products):
         y=102+n*40
         draw.rectangle((26,y,525,y+39),fill='#eee' if n%2==0 else 'white')
@@ -63,6 +63,10 @@ with tempfile.TemporaryDirectory(prefix='rip-columns-') as temp, sync_playwright
         assert [item['quantity'],item['unit'],item['unitPrice'],item['total']]==expected[1:],(item,expected)
     assert page.locator('#receiptTotal').input_value()=='151,28'
     assert page.locator('#subtotal').inner_text().replace('\xa0',' ')=='R$ 151,28'
+    assert page.locator('#store').input_value()=='Supermercado de teste'
+    assert page.locator('#cnpj').input_value()=='11.222.333/0001-81'
+    assert page.locator('#date').input_value()==''
+    page.locator('#store').fill('Mercado conferido manualmente')
     # Reconstrução do texto não deve repetir itens nem apagar outras imagens.
     page.locator('#ocrTexts > details > summary').click()
     page.locator('[data-edit-text]').fill('Texto ilegível sem produto ou valores')
@@ -74,13 +78,15 @@ with tempfile.TemporaryDirectory(prefix='rip-columns-') as temp, sync_playwright
     page.locator('[data-rebuild]').click()
     assert page.locator('.item').count()==10
     assert 'CORRIGIDA' in page.locator('[data-field="description"]').first.input_value()
-    page.locator('#store').fill('Mercado de teste')
+    assert page.locator('#store').input_value()=='Mercado conferido manualmente'
     page.locator('#date').fill('2026-10-26')
     page.locator('#reviewed').check()
     page.locator('#confirm').click()
     page.wait_for_function("!document.getElementById('listView').hidden")
     assert page.locator('#pending').inner_text()=='0'
     page.locator('[data-open]').click()
+    assert page.locator('#store').input_value()=='Mercado conferido manualmente'
+    assert page.locator('#cnpj').input_value()=='11.222.333/0001-81'
     assert 'CORRIGIDA' in page.locator('[data-field="description"]').first.input_value()
     page.screenshot(path='/tmp/rip-columns-review.png',full_page=True)
     browser.close()

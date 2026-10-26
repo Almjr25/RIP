@@ -26,7 +26,7 @@ Se nenhum item aparecer, abra **Imagem …: conferir texto e reconstruir**, corr
 
 Após a extração, confira os itens, preencha estabelecimento e data e verifique a diferença em relação ao total do cupom. Avisos por item mostram campos ausentes ou contas inconsistentes. Marque a revisão e confirme somente quando os dados estiverem corretos.
 
-Testes: `node tests/receipt.test.js` valida oito cenários do parser. `python3 tests/column_ocr_smoke.py` usa OCR real em uma captura sintética anônima no layout de colunas (10 itens, R$ 151,28), verifica reconstrução sem duplicação e confirmação persistida. Esses testes não usam a imagem original do usuário e não garantem precisão em qualquer captura.
+Testes: `node tests/receipt.test.js` valida cenários do parser. `python3 tests/column_ocr_smoke.py` usa OCR real em uma captura sintética anônima no layout de colunas (10 itens, R$ 151,28), verifica reconstrução sem duplicação e confirmação persistida. Esses testes não usam a imagem original do usuário e não garantem precisão em qualquer captura.
 
 ## Executar
 
@@ -69,3 +69,7 @@ Para repetir toda a preparação neste ambiente, execute `sh scripts/setup.sh`. 
 O SQLite contém tabelas de compras, itens e imagens de cada compra, com totais e descontos em centavos; quantidades e preços unitários são preservados como texto decimal para não perder casas de precisão. O documento completo e o histórico de correções também são retidos. Os rascunhos aceitam capturas ainda não processadas; o OCR só começa por comando explícito.
 
 O teste de OCR deve ser feito também com capturas reais dos portais utilizados: desempenho em imagem sintética não comprova precisão em cupons reais.
+
+### Estabelecimento automático
+
+O cabeçalho do OCR preenche nome e CNPJ numérico do estabelecimento, mantendo ambos editáveis e sem sobrescrever campos já preenchidos. O CNPJ só é sugerido quando seus dígitos verificadores conferem; se estiver ilegível ou inválido, fica vazio com aviso para conferência. O campo é opcional para preservar compras antigas e capturas sem cabeçalho. A data permanece manual. Esses dados acompanham compras, rascunhos e backups.

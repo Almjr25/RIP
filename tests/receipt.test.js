@@ -60,3 +60,23 @@ test('texto ilegível produz orientação em vez de falso sucesso',()=>{
  const r=parse('Texto ilegível sem itens','a');assert.equal(r.items.length,0);assert.match(r.warnings.join(' '),/Reconstruir/);
 });
 module.exports={products,layout};
+
+test('nome e CNPJ do cabeçalho, inclusive marcador CNP) do OCR',()=>{
+ const r=parse('DANFE NFC-e\nMERCADO DE TESTE LTDA\nCNP): 11.222.333/0001-81\n'+layout,'a');
+ assert.equal(r.store,'MERCADO DE TESTE LTDA');assert.equal(r.cnpj,'11.222.333/0001-81');assert.equal(r.items.length,10);
+});
+test('CNPJ sem pontuação e nome na mesma linha',()=>{
+ const r=parse('MERCADO TESTE CNPJ: 11222333000181\n'+layout,'a');
+ assert.equal(r.store,'MERCADO TESTE');assert.equal(r.cnpj,'11.222.333/0001-81');
+});
+test('CNPJ ilegível ou inválido não é adivinhado',()=>{
+ for(const value of ['11.222.333/0001-82','00.000.000/0000-00','11.222.33O/0001-81']){
+  const r=parse('MERCADO TESTE\nCNPJ: '+value+'\n'+layout,'a');
+  assert.equal(r.cnpj,'');assert.equal(r.store,'MERCADO TESTE');assert.match(r.warnings.join(' '),/CNPJ/);
+ }
+});
+test('captura sem cabeçalho não inventa estabelecimento',()=>{
+ const r=parse(layout,'a');assert.equal(r.store,'');assert.equal(r.cnpj,'');
+ const footerOnly=parse('ARROZ 2 UN x 7,50 15,00\nValor a pagar R$: 15,00\nCONSUMIDOR\nCNPJ: 11.222.333/0001-81','a');
+ assert.equal(footerOnly.store,'');assert.equal(footerOnly.cnpj,'');
+});

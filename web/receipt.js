@@ -8,6 +8,28 @@
   const unit = /\bUN\s*[:;]\s*(KG|UND|UN|LT|ML|PC|L|G)\b/i;
   const normalizeMoney = value => {if(!value)return '';return value.includes(',')?value:value.replace(/\.(\d{2,4})$/,',$1')};
   const footer = /(?:[QO]t[de.]*\s*\.?\s*total\s+de\s+itens|Valor\s+a\s+pagar|Forma\s+de\s+pagamento|Informa[çc][õo]es\s+gerais|EMISS[ÃA]O\s+NORMAL|Chave\s+de\s+acesso)/i;
+  function validCNPJ(value){
+    const digits=String(value||'').replace(/\D/g,'');
+    if(digits.length!==14||/^(\d)\1+$/.test(digits))return false;
+    const check=part=>{let weight=part.length-7,sum=0;for(const digit of part){sum+=Number(digit)*weight;weight=weight===2?9:weight-1}const mod=sum%11;return String(mod<2?0:11-mod)};
+    return digits[12]===check(digits.slice(0,12))&&digits[13]===check(digits.slice(0,13));
+  }
+  function formatCNPJ(value){return String(value).replace(/\D/g,'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}
+  function establishment(lines){
+    const firstItem=lines.findIndex(line=>code.test(line)||quantity.test(line)||footer.test(line)||/\b\d+(?:[.,]\d+)?\s*(?:KG|UN|L|LT|G|ML|PC)?\s*[xX×]\s*\d/.test(line));
+    const header=lines.slice(0,firstItem<0?Math.min(lines.length,12):firstItem);
+    const marker=/\bC\s*N\s*P\s*(?:J|I|\)|\])\s*[:.;-]?/i;
+    const index=header.findIndex(line=>marker.test(line));
+    if(index<0)return {store:'',cnpj:'',cnpjWarning:''};
+    const line=header[index],m=line.match(marker);
+    const tail=line.slice(m.index+m[0].length).trim()||header[index+1]||'';
+    const raw=tail.match(/^((?:\d[ ./-]*){13}\d)(?![ ./-]*\d)/)?.[1]||'';
+    const cnpj=validCNPJ(raw)?formatCNPJ(raw):'';
+    const inline=line.slice(0,m.index).trim();
+    const candidates=inline?[inline]:header.slice(0,index).reverse();
+    const store=candidates.find(name=>/[A-Za-zÀ-ÿ]/.test(name)&&!/(?:DANFE|NFC-?e|documento auxiliar|consulta|nota fiscal|consumidor|https?:|^\s*CPF\b)/i.test(name))||'';
+    return {store,cnpj,cnpjWarning:cnpj?'':'O CNPJ do cabeçalho não pôde ser validado. Confira a imagem e preencha o campo se estiver legível.'};
+  }
   function parse(text, source){
     text=String(text||'').replace(/\r/g,'').replace(/\u00a0/g,' ');
     const lines=text.split('\n').map(x=>x.replace(/[ \t]+/g,' ').trim()).filter(Boolean);
@@ -54,8 +76,10 @@
     const count=text.match(/[QO]t[de.]*\s*\.?\s*total\s+de\s+itens\s*[:;]?\s*(\d+)/i)?.[1];
     if(count&&+count!==items.length)warnings.push(`O cupom informa ${count} itens; foram reconstruídos ${items.length}. Confira as imagens e possíveis cortes.`);
     if(!items.length)warnings.push('O texto foi lido, mas os blocos de produto não foram identificados. Corrija o texto abaixo e selecione “Reconstruir itens deste texto”, ou adicione os itens manualmente.');
-    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings};
+    const merchant=establishment(lines);
+    if(merchant.cnpjWarning)warnings.push(merchant.cnpjWarning);
+    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj};
   }
-  root.ReceiptParser={parse};
-  if(typeof module!=='undefined')module.exports={parse};
+  root.ReceiptParser={parse,validCNPJ,formatCNPJ};
+  if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ};
 })(globalThis);
