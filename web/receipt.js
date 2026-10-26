@@ -32,7 +32,9 @@
     if(/^Total\b/i.test(next.trim()))cleaned=cleaned.replace(/\bV[lI1!]{1,2}[.,]?\s*$/i,'');
     return cleaned;
   };
-  const footer = /(?:[QO]t[de.]*\s*\.?\s*total\s+de\s+itens|Valor\s+a\s+pagar|Forma\s+de\s+pagamento|Informa[çc][õo]es\s+gerais|EMISS[ÃA]O\s+NORMAL|Chave\s+de\s+acesso)/i;
+  const footer = /(?:[QO]t[de.]*\s*\.?\s*total\s+de\s+itens|Valor\s+total\s*R\s*\$|Valor\s+a\s+pagar|Forma\s+de\s+pagamento|Informa[çc][õo]es\s+gerais|EMISS[ÃA]O\s+NORMAL|Chave\s+de\s+acesso)/i;
+  const amountPattern='(\\d+(?:\\.\\d{3})*[,.]\\d{1,2})(?![\\d.,/])';
+  function discountMatch(text){return text.match(new RegExp('(?:\\bDescontos?(?:\\s+(?:do\\s+item|geral|total))?|\\bVl[.,]?\\s*Desc[.,]?)\\s*(?:R\\s*\\$)?\\s*[:;]?\\s*'+amountPattern,'i'))}
   function validCNPJ(value){
     const digits=String(value||'').replace(/\D/g,'');
     if(digits.length!==14||/^(\d)\1+$/.test(digits))return false;
@@ -83,7 +85,7 @@
       const stop=starts[n+1]??body.length;
       if(used.has(start))return;
       const block=body.slice(start,stop).join('\n');
-      const qm=block.match(quantity),pm=block.match(price),um=block.match(unit),cm=block.match(code);
+      const qm=block.match(quantity),pm=block.match(price),um=block.match(unit),cm=block.match(code),dm=discountMatch(block);
       let desc=stripTotalLabel(body[start].replace(code,''),body[start+1]).split(quantity)[0].trim();
       desc=desc.replace(/\s+\d+[,.]\d{2}\s*$/,'').trim();
       if(!desc||(!qm&&!cm))return;
@@ -91,11 +93,13 @@
         const a=m.index,b=a+m[0].length;
         if(qm&&a>=qm.index&&b<=qm.index+qm[0].length)return false;
         if(pm&&a>=pm.index&&b<=pm.index+pm[0].length)return false;
+        if(dm&&a>=dm.index&&b<=dm.index+dm[0].length)return false;
         // Números na descrição não são totais do item.
         return a>=(cm?cm.index+cm[0].length:(qm?qm.index:desc.length));
       });
       const total=tokens.length?tokens[tokens.length-1][0]:'';
       const item=make(desc,qm?.[1],um?.[1]?.toUpperCase(),pm?.[1],total,block,cm?.[1]||'');
+      if(dm)item.discount=normalizeMoney(dm[1]);
       if(item.unitRaw&&!item.unit)warnings.push(`Unidade “${item.unitRaw}” não reconhecida em “${desc}”. Confira o texto da nota e informe uma unidade válida.`);
       if(!item.quantity||!item.unit||!item.unitPrice||!item.total)warnings.push(`Confira os campos incompletos de “${desc}”.`);
       if(!item.unitPrice&&/V[lI1!]{1,2}[.,]?\s*Unit/i.test(block))warnings.push(`O preço unitário de “${desc}” não tem uma leitura decimal segura. Confira a vírgula no texto; o RIP não adivinha casas decimais.`);
@@ -104,11 +108,13 @@
     const tail=end<0?'':lines.slice(end).join('\n');
     const receiptTotal=tail.match(/Valor\s+a\s+pagar\s*(?:R\s*\$|RS|R5)?\s*[:;]?\s*(\d+(?:\.\d{3})*[,.]\d{2})/i)?.[1]||'';
     const count=text.match(/[QO]t[de.]*\s*\.?\s*total\s+de\s+itens\s*[:;]?\s*(\d+)/i)?.[1];
-    if(count&&+count!==items.length)warnings.push(`O cupom informa ${count} itens; foram reconstruídos ${items.length}. Confira as imagens e possíveis cortes.`);
+    if(count&&+count!==items.length)warnings.push(`O texto informa ${count} itens; foram importados ${items.length}. A cópia pode estar incompleta.`);
     if(!items.length)warnings.push('O texto foi lido, mas os blocos de produto não foram identificados. Inclua todos os campos da nota e selecione Interpretar texto, ou adicione os itens manualmente.');
     const merchant=establishment(lines);
     if(merchant.cnpjWarning)warnings.push(merchant.cnpjWarning);
-    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj};
+    const globalDiscount=discountMatch(tail);
+    const globalExtra=tail.match(new RegExp('\\bAcr[eé]scimos?(?:\\s+(?:gerais|geral|total))?\\s*(?:R\\s*\\$)?\\s*[:;]?\\s*'+amountPattern,'i'));
+    return {items,receiptTotal:normalizeMoney(receiptTotal),expectedCount:count?+count:null,warnings,store:merchant.store,cnpj:merchant.cnpj,discount:globalDiscount?normalizeMoney(globalDiscount[1]):undefined,extra:globalExtra?normalizeMoney(globalExtra[1]):undefined};
   }
   root.ReceiptParser={parse,validCNPJ,formatCNPJ,normalizeUnit};
   if(typeof module!=='undefined')module.exports={parse,validCNPJ,formatCNPJ,normalizeUnit};

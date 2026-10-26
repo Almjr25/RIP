@@ -1,5 +1,5 @@
 import unittest
-from server import cents, reconcile
+from server import cents, reconcile, validate_purchase
 
 
 class ReceiptTests(unittest.TestCase):
@@ -24,6 +24,13 @@ class ReceiptTests(unittest.TestCase):
     def test_difference_preserved(self):
         p = {'items': [{'description': 'Leite', 'quantity': '2', 'unitPrice': '5,00', 'total': '10,00'}], 'receiptTotal': '10,50'}
         self.assertEqual(reconcile(p)['difference'], -50)
+
+    def test_save_without_manual_review_declaration(self):
+        p = {'store': 'Mercado', 'date': '2026-10-26', 'items': [{'description': 'Leite', 'quantity': '2', 'unit': 'UN', 'unitPrice': '5,00', 'total': '10,00'}], 'receiptTotal': '10,00', 'analysis': {'expectedCount': 1}}
+        self.assertEqual(validate_purchase(p)['difference'], 0)
+        p['analysis']['expectedCount'] = 2
+        with self.assertRaises(ValueError):
+            validate_purchase(p)
 
 
 

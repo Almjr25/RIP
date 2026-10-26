@@ -52,17 +52,24 @@ def main():
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.on('request',lambda r:external.append(r.url) if r.url.startswith(('http:','https:')) and not r.url.startswith(URL) else None)
     page.on('dialog',lambda d:d.accept())
+    def paste(value):
+     page.locator('#textDetails').evaluate('(el)=>el.open=true')
+     page.locator('#receiptText').fill(value)
+    def interpret():
+     page.locator('#textDetails').evaluate('(el)=>el.open=true')
+     page.locator('#process').click()
     page.goto(URL)
+    assert page.locator('#reviewed').count()==0
     assert page.locator('input[accept*="image"]').count()==0
     page.locator('#newPurchase').click()
-    page.locator('#receiptText').fill(TEXT)
+    paste(TEXT)
     page.locator('#save').click()
     page.wait_for_function("!document.getElementById('listView').hidden")
     page.locator('[data-open]').click()
     assert page.locator('#receiptText').input_value()==TEXT
     assert page.locator('.item').count()==0
     if not BACKEND:context.set_offline(True)
-    page.locator('#process').click()
+    interpret()
     assert page.locator('.item').count()==3
     assert page.locator('#store').input_value()=='MERCADO DE TESTE LTDA'
     assert page.locator('#cnpj').input_value()=='11.222.333/0001-81'
@@ -70,29 +77,36 @@ def main():
     assert page.locator('#receiptTotal').input_value()=='79,19'
     assert page.locator('[data-field="unit"]').evaluate_all('(els)=>els.map(e=>e.value)')==['UN','KG','PCT']
     assert page.locator('#subtotal').inner_text().replace('\xa0',' ')=='R$ 79,19'
-    page.locator('#process').click()
+    interpret()
     assert page.locator('.item').count()==3,'Interpretar novamente duplicou itens'
-    page.locator('#receiptText').fill('')
-    page.locator('#reviewed').check();page.locator('#confirm').click()
-    assert 'texto foi alterado' in page.locator('#notice').inner_text()
-    page.locator('#receiptText').fill('Texto sem produtos')
-    page.locator('#process').click()
-    assert page.locator('.item').count()==3,'Texto sem produtos apagou itens'
-    page.locator('#receiptText').fill(TEXT+'\n')
+    assert page.locator('.item[open]').count()==0,'Itens válidos ficaram abertos para revisão obrigatória'
+    paste(TEXT.replace('itens: 3','itens: 4'))
+    interpret()
     page.locator('#date').fill('2026-10-26')
-    page.locator('#reviewed').check()
+    page.locator('#confirm').click()
+    assert 'lista contém 3' in page.locator('#notice').inner_text()
+    paste(TEXT)
+    interpret()
+    paste('')
     page.locator('#confirm').click()
     assert 'texto foi alterado' in page.locator('#notice').inner_text()
-    page.locator('#process').click()
+    paste('Texto sem produtos')
+    interpret()
+    assert page.locator('.item').count()==3,'Texto sem produtos apagou itens'
+    paste(TEXT+'\n')
+    page.locator('#date').fill('2026-10-26')
+    page.locator('#confirm').click()
+    assert 'texto foi alterado' in page.locator('#notice').inner_text()
+    interpret()
     page.locator('#receiptTotal').fill('79,20')
-    page.locator('#reviewed').check();page.locator('#confirm').click()
-    assert 'Confira' in page.locator('#notice').inner_text()
+    page.locator('#confirm').click()
+    assert 'difere' in page.locator('#notice').inner_text()
     page.locator('#receiptTotal').fill('79,19')
-    page.locator('#reviewed').check();page.locator('#confirm').click()
+    page.locator('#confirm').click()
     page.wait_for_function("!document.getElementById('listView').hidden")
     context.set_offline(False)
     page.reload();page.locator('[data-open]').click()
-    assert page.locator('#stateBadge').inner_text()=='Conferida'
+    assert page.locator('#stateBadge').inner_text()=='Registrada'
     assert page.locator('.item').count()==3
     assert page.evaluate('purchase.items[1].unitRaw')=='KG9'
     assert page.locator('#receiptText').input_value()==TEXT+'\n'
@@ -110,13 +124,14 @@ def main():
      page.locator('#importBackup').set_input_files(str(backup))
      page.locator('[data-open]').wait_for();page.locator('[data-open]').click()
      assert page.locator('.item').count()==3
-     assert page.locator('#stateBadge').inner_text()=='Conferida'
+     assert page.locator('#stateBadge').inner_text()=='Registrada'
      page.locator('#back').click()
      image={'id':'b'*64+'.png','data':'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='}
      legacy={'id':'a'*32,'status':'draft','store':'MERCADO ANTIGO','date':'2026-10-25','receiptTotal':'5,00','discount':'0,00','extra':'0,00','items':[{'description':'ITEM LEGADO','quantity':'1','unit':'UN','unitPrice':'5,00','discount':'0,00','total':'5,00','source':image['id']}],'images':[{'image':image['id'],'name':'antiga.png','text':'texto antigo','processed':True}]}
      legacyfile=Path(temp)/'legacy.json';legacyfile.write_text(json.dumps({'format':'rip-desktop','version':1,'purchases':[legacy],'images':[image]}))
      page.locator('#importBackup').set_input_files(str(legacyfile))
      page.locator('[data-open="'+'a'*32+'"]').click()
+     page.locator('#textDetails').evaluate('(el)=>el.open=true')
      assert page.locator('#legacyNotice').is_visible()
      assert page.locator('.item').count()==1
      page.locator('#save').click()
@@ -126,6 +141,27 @@ def main():
      exported=json.loads(legacyexport.read_text())
      assert exported['images'][0]['data']==image['data']
      assert next(x for x in exported['purchases'] if x['id']==legacy['id'])['images']==legacy['images']
+    # Ajustes explícitos são importados; alterações manuais não são sobrescritas.
+    page.locator('#newPurchase').click()
+    adjustment='MERCADO TESTE\nCNPJ: 11.222.333/0001-81\nPRODUTO (Código: 1)\nQtde.: 1 UN: UN Vl. Unit.: 10,00\nVl. Total\n9,50\nDesconto do item: 0,50\nQtd. total de itens: 1\nDescontos R$: 1,00\nAcréscimos R$: 0,25\nValor a pagar R$: 8,75'
+    paste(adjustment);interpret()
+    assert page.locator('#discount').input_value()=='1,00'
+    assert page.locator('#extra').input_value()=='0,25'
+    assert page.locator('#adjustments').evaluate('(el)=>el.open')
+    assert page.locator('[data-field="discount"]').input_value()=='0,50'
+    no_adjustment=adjustment.replace('Descontos R$: 1,00\nAcréscimos R$: 0,25\n','').replace('8,75','9,50')
+    paste(no_adjustment);interpret()
+    assert page.locator('#discount').input_value()=='0,00'
+    assert page.locator('#extra').input_value()=='0,00'
+    page.locator('#adjustments').evaluate('(el)=>el.open=true')
+    page.locator('#discount').fill('0,75')
+    paste(adjustment);interpret()
+    assert page.locator('#discount').input_value()=='0,75'
+    page.locator('#discount').fill('1,00')
+    page.locator('#date').fill('2026-10-26')
+    assert 'Pronta para salvar' in page.locator('#reconstructionSummary').inner_text()
+    page.locator('#confirm').click()
+    page.wait_for_function("!document.getElementById('listView').hidden")
     assert not external,external
     assert not errors,errors
     browser.close()

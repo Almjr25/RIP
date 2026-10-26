@@ -4,6 +4,7 @@ import os
 import re
 import sqlite3
 import uuid
+from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -73,6 +74,35 @@ def reconcile(p):
     return {'subtotal': subtotal, 'total': total, 'difference': difference}
 
 
+def validate_purchase(p):
+    result = reconcile(p)
+    if result['difference'] != 0:
+        raise ValueError('A soma dos itens e ajustes difere do total da nota.')
+    if not str(p.get('store', '')).strip():
+        raise ValueError('Informe o estabelecimento.')
+    try:
+        date.fromisoformat(p.get('date', ''))
+    except (ValueError, TypeError):
+        raise ValueError('Informe uma data válida.')
+    if any(not str(item.get('unit', '')).strip() for item in p['items']):
+        raise ValueError('Há itens sem unidade.')
+    expected = p.get('analysis', {}).get('expectedCount')
+    if type(expected) is int and expected != len(p['items']):
+        raise ValueError('A quantidade de itens difere da informada no texto.')
+    text, parsed = p.get('receiptText', ''), p.get('parsedText', '')
+    if (parsed and text != parsed) or (text.strip() and not parsed):
+        raise ValueError('Interprete o texto alterado antes de salvar a compra.')
+    cnpj = re.sub(r'\D', '', p.get('cnpj', ''))
+    if p.get('cnpj'):
+        def check(part):
+            weights = ([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] if len(part) == 12 else [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+            remainder = sum(int(x) * w for x, w in zip(part, weights)) % 11
+            return str(0 if remainder < 2 else 11 - remainder)
+        if len(cnpj) != 14 or len(set(cnpj)) == 1 or cnpj[12] != check(cnpj[:12]) or cnpj[13] != check(cnpj[:13]):
+            raise ValueError('O CNPJ informado é inválido.')
+    return result
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT / 'web'), **kwargs)
@@ -120,9 +150,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not re.fullmatch(r'[a-f0-9]{32}', ident):
                     raise ValueError('Identificação inválida.')
                 if p['status'] == 'confirmed':
-                    result = reconcile(p)
-                    if result['difference'] != 0 or not p.get('reviewed') or not p.get('store', '').strip() or not p.get('date'):
-                        raise ValueError('Para confirmar, informe estabelecimento e data, revise os itens e zere a diferença.')
+                    validate_purchase(p)
                 key = re.sub(r'\D', '', p.get('key', ''))
                 if key and len(key) != 44:
                     raise ValueError('A chave fiscal deve ter 44 dígitos ou ficar vazia.')

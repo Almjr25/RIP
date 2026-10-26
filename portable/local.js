@@ -7,7 +7,7 @@ async function localAPI(path,body){
   await localDB;
   if(path==='/api/purchases'&&!body)return (await readAll('purchases')).reverse();
   if(path==='/api/purchases'&&body){
-    const p=structuredClone(body);p.id=p.id||crypto.randomUUID().replaceAll('-','');
+    const p=structuredClone(body);if(p.status==='confirmed'){const checks=ReceiptValidation.validate(p);if(!checks.ready)throw Error(checks.issues.map(x=>x.message).join(' '))}p.id=p.id||crypto.randomUUID().replaceAll('-','');
     const key=String(p.key||'').replace(/\D/g,'');
     if(key&&key.length!==44)throw Error('A chave fiscal deve ter 44 dígitos ou ficar vazia.');
     p.key=key;
