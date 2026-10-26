@@ -57,7 +57,7 @@ test('itens iguais não são apagados como sobreposição',()=>{
  const r=parse('ARROZ 2 UN x 7,50 15,00\nARROZ 2 UN x 7,50 15,00','a');assert.equal(r.items.length,2);
 });
 test('texto ilegível produz orientação em vez de falso sucesso',()=>{
- const r=parse('Texto ilegível sem itens','a');assert.equal(r.items.length,0);assert.match(r.warnings.join(' '),/Reconstruir/);
+ const r=parse('Texto ilegível sem itens','a');assert.equal(r.items.length,0);assert.match(r.warnings.join(' '),/Interpretar/);
 });
 module.exports={products,layout};
 
@@ -115,23 +115,12 @@ test('preço com milhar e casas adicionais permanece íntegro',()=>{
  assert.equal(s.items[0].unitPrice,'8,4999');assert.equal(s.items[0].total,'8,50');
 });
 
-test('barra no lugar de 7 gera sugestão sem preencher campos',()=>{
- const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: PCT Vl. Unit.: /,59 /,59','a');
- const i=r.items[0];assert.equal(i.unitPrice,'');assert.equal(i.total,'');
- assert.deepEqual(i.ocrSuggestions.map(s=>[s.field,s.original,s.value]),[['unitPrice','/,59','7,59'],['total','/,59','7,59']]);
- assert.ok(i.rawText.includes('/,59'));assert.match(r.warnings.join(' '),/confusão/);
-});
-test('barra em qualquer posição decimal pode sugerir 7',()=>{
- const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 1 UN: PCT Vl. Unit.: 3/,9/ 3/,9/','a');
- assert.deepEqual(r.items[0].ocrSuggestions.map(s=>s.value),['37,97','37,97']);
-});
-test('não inventa uma vírgula junto com a troca de barra por 7',()=>{
- const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 5 UN: PCT9Vl. Unit.: 759 5/95','a');
- assert.deepEqual(r.items[0].ocrSuggestions,[]);assert.equal(r.items[0].unitPrice,'');assert.equal(r.items[0].total,'');
-});
+
+
+
 test('barras de descrição, unidade ou código não são corrigidas',()=>{
  const r=parse('PRODUTO 1/2 (Código: 12/34)\nQtde.: 1 UN: KG/L Vl. Unit.: 8,49 8,49','a');
- const i=r.items[0];assert.deepEqual(i.ocrSuggestions,[]);assert.equal(i.unit,'');assert.equal(i.unitRaw,'KG/L');assert.equal(i.productCode,'12/34');assert.equal(i.description,'PRODUTO 1/2');
+ const i=r.items[0];assert.equal(i.unit,'');assert.equal(i.unitRaw,'KG/L');assert.equal(i.productCode,'12/34');assert.equal(i.description,'PRODUTO 1/2');
 });
 
 test('normaliza os sufixos observados nos cupons sem alterar números de compra',()=>{
@@ -158,4 +147,12 @@ test('unidade desconhecida não é aceita por prefixo nem truncada',()=>{
 test('VIL. colado à unidade é tratado como rótulo e não como unidade',()=>{
  const r=parse('PRODUTO TESTE (Código: 1)\nQtde.: 2 UN: UND9VIL. Unit.: 6,99 13,98','a');
  const i=r.items[0];assert.equal(i.unitRaw,'UND9');assert.equal(i.unit,'UN');assert.equal(i.unitPrice,'6,99');assert.equal(i.total,'13,98');
+});
+
+test('texto copiado com tabulações e cada campo em uma linha mantém os dados',()=>{
+ const text='MERCADO TESTE\nCNPJ:\n11.222.333/0001-81\nPRODUTO A\n(Código: 1)\nQtde.:\n1\nUN:\nUND9\nVl. Unit.:\n17,9\nVl. Total\n17,90\nPRODUTO B (Código: 2)\nQtde.:\t0,544\tUN:\tKG9\tVl. Unit.:\t42,9\nVl. Total\n23,34\nQtd. total de itens:\t2\nValor a pagar R$:\n41,24';
+ const r=parse(text,'pasted-text');
+ assert.equal(r.store,'MERCADO TESTE');assert.equal(r.cnpj,'11.222.333/0001-81');assert.equal(r.items.length,2);assert.equal(r.receiptTotal,'41,24');
+ assert.deepEqual(r.items.map(i=>[i.description,i.quantity,i.unitRaw,i.unit,i.unitPrice,i.total]),[['PRODUTO A','1','UND9','UN','17,90','17,90'],['PRODUTO B','0,544','KG9','KG','42,90','23,34']]);
+ assert.deepEqual(r.warnings,[]);
 });

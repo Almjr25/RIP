@@ -1,12 +1,8 @@
-"""RIP: servidor local, SQLite e OCR sem serviços externos."""
-import base64
-import hashlib
-import io
+"""RIP: servidor local com persistência SQLite para cupons copiados como texto."""
 import json
 import os
 import re
 import sqlite3
-import subprocess
 import uuid
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -77,22 +73,6 @@ def reconcile(p):
     return {'subtotal': subtotal, 'total': total, 'difference': difference}
 
 
-def extract(text, image_id):
-    """Conservador: só propõe linhas com quantidade x preço = total."""
-    money = r'(\d+(?:\.\d{3})*,\d{2})'
-    pattern = re.compile(r'^(.*?)\s+(\d+(?:[.,]\d+)?)\s*(KG|UN|UND|L|LT|G|ML|PC)?\s*[xX×]\s*' + money + r'\s*(?:=|\s)\s*' + money + r'\s*$', re.I)
-    result = []
-    for line in text.splitlines():
-        m = pattern.match(line.strip())
-        if m and m[1].strip():
-            result.append({'id': uuid.uuid4().hex, 'description': m[1].strip(), 'quantity': m[2], 'unit': (m[3] or 'UN').upper(), 'unitPrice': m[4], 'discount': '0,00', 'total': m[5], 'source': image_id})
-    # Formato textual comum de portais: descrição e campos rotulados.
-    labelled = re.compile(r'(?m)^([^\n]+)\n(?:\(?C[oó]digo[^\n]*\n)?\s*Qt(?:de|d)\.?\s*:\s*(\d+(?:[.,]\d+)?)\s+UN\s*:\s*(KG|UN|UND|L|LT|G|ML|PC)\s+Vl\.?\s*Unit\.?\s*:\s*' + money + r'\s+Vl\.?\s*Total\s*:?\s*' + money, re.I)
-    for m in labelled.finditer(text):
-        result.append({'id': uuid.uuid4().hex, 'description': m[1].strip(), 'quantity': m[2], 'unit': m[3].upper(), 'unitPrice': m[4], 'discount': '0,00', 'total': m[5], 'source': image_id})
-    return result
-
-
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT / 'web'), **kwargs)
@@ -133,35 +113,6 @@ class Handler(SimpleHTTPRequestHandler):
             if not 0 < size <= 30 * 1024 * 1024:
                 return self.reply({'error': 'Envie até 30 MB por requisição.'}, 413)
             p = json.loads(self.rfile.read(size))
-            if self.path in ('/api/ocr', '/api/images'):
-                from PIL import Image, ImageOps
-                if p.get('source'):
-                    if not re.fullmatch(r'[a-f0-9]{64}\.png', p['source']):
-                        raise ValueError('Referência de imagem inválida.')
-                    raw = (DATA / 'images' / p['source']).read_bytes()
-                else:
-                    raw = base64.b64decode(p['image'].split(',', 1)[-1], validate=True)
-                image = Image.open(io.BytesIO(raw))
-                if image.width * image.height > 40_000_000:
-                    raise ValueError('Imagem muito grande. Divida a captura em partes menores.')
-                image = ImageOps.exif_transpose(image).convert('RGB')
-                out = io.BytesIO()
-                image.save(out, format='PNG')
-                image_id = hashlib.sha256(out.getvalue()).hexdigest() + '.png'
-                path = DATA / 'images' / image_id
-                path.write_bytes(out.getvalue())
-                if self.path == '/api/images':
-                    return self.reply({'image': image_id})
-                lang_dir = ROOT / '.data' / 'tessdata'
-                args = ['tesseract', str(path), 'stdout', '--psm', '6']
-                if (lang_dir / 'por.traineddata').exists():
-                    args += ['--tessdata-dir', str(lang_dir), '-l', 'por']
-                else:
-                    args += ['-l', 'eng']
-                run = subprocess.run(args, capture_output=True, text=True, timeout=90)
-                if run.returncode:
-                    raise ValueError('O OCR não conseguiu ler esta imagem. Tente outra captura.')
-                return self.reply({'image': image_id, 'text': run.stdout, 'items': extract(run.stdout, image_id)})
             if self.path == '/api/purchases':
                 if p.get('status') not in ('draft', 'confirmed'):
                     raise ValueError('Estado inválido.')
@@ -197,7 +148,7 @@ class Handler(SimpleHTTPRequestHandler):
                         c.execute('INSERT INTO purchase_images VALUES(?,?,?,?,?)', (ident, n, im['image'], im.get('name'), im.get('text')))
                 return self.reply(p)
             return self.reply({'error': 'Rota não encontrada.'}, 404)
-        except (ValueError, KeyError, InvalidOperation, OSError, subprocess.TimeoutExpired) as e:
+        except (ValueError, KeyError, InvalidOperation, OSError) as e:
             return self.reply({'error': str(e) or 'Dados inválidos.'}, 400)
 
 

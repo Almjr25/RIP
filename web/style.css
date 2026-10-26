@@ -3,3 +3,5 @@
 .right-col{align-self:start;position:sticky;top:20px}#liveTotals{display:none}@media(max-width:800px){.right-col{position:static}#editorView{padding-bottom:65px}#liveTotals{display:block;position:fixed;bottom:0;left:0;right:0;width:100%;z-index:4;border:0;border-top:1px solid #cfddcb;background:#eaf2e6;color:#205c42;padding:18px 12px;font-size:12px;font-weight:600;box-shadow:0 -4px 20px #243c3310}}
 
 textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-radius:6px;font:12px/1.6 monospace;color:var(--ink);resize:vertical}.ocr-actions{display:flex;gap:18px;align-items:center;margin-top:12px;flex-wrap:wrap}.reconstruction-summary{padding:15px;border:1px solid #d4e1cd;border-radius:7px;background:#f2f7ed;margin-top:18px;font-size:12px}.reconstruction-summary p{font-size:11px;margin:8px 0 0}
+
+#receiptText{font:13px/1.7 monospace;min-height:250px}.backup-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:20px}.backup-actions label{display:inline-block;margin:0}.legacy-note{font-size:11px;color:var(--muted)}
