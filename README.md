@@ -1,6 +1,6 @@
 # RIP — Rastreador de Inflação Pessoal
 
-Registre compras de supermercado colando o texto da consulta da NFC-e. Versão 0.4: **sem upload de imagens, OCR, serviços pagos ou bibliotecas externas**. A normalização das unidades e a conferência dos valores permanecem.
+Registre compras de supermercado colando o texto da consulta da NFC-e, sem upload de imagens nem OCR. A normalização das unidades e a conferência dos valores permanecem. O HTML independente usa armazenamento local. O site também pode usar **login e PostgreSQL no Supabase**, conforme o [guia de ativação](supabase/ATIVAR.md); esse modo exige configuração e não é ativado automaticamente.
 
 ## Como usar
 
@@ -20,7 +20,7 @@ Preços e totais devem ter separador decimal legível. O parser não adivinha v�
 
 ## Site e arquivo HTML
 
-A Vercel publica a versão estática. O texto é interpretado no navegador, sem requisições a APIs e sem carregar bibliotecas de terceiros. Depois de abrir a página, a interpretação e a edição funcionam sem conexão; reabrir/recarregar o site ainda depende de acesso à hospedagem.
+No modo local, a Vercel publica a versão estática. O texto é interpretado no navegador, sem requisições a APIs e sem carregar bibliotecas de terceiros. Depois de abrir a página, a interpretação e a edição funcionam sem conexão; reabrir/recarregar o site ainda depende de acesso à hospedagem. **No modo nuvem**, o texto também é interpretado no navegador, mas salvar/consultar cupons e autenticar exigem conexão com a API; os dados são enviados ao banco privado da conta.
 
 O arquivo `RIP.html` usa a mesma interface e pode ser aberto no Chrome/Edge. Os dados ficam no IndexedDB do navegador, não dentro do HTML nem em um banco na nuvem. Não há sincronização entre dispositivos. Use **Exportar backup** regularmente; trocar de origem, navegador, perfil ou limpar dados pode tornar o histórico indisponível. Para migrar do HTML ao site, exporte nele e importe no site.
 
@@ -33,7 +33,7 @@ Conecte `Almjr25/RIP`, branch `main`. Use **Framework: Other**, **Root Directory
 - Build: `node scripts/build_portable.mjs --vercel`
 - Output: `dist`
 
-Não são necessários Python, banco remoto, variáveis de ambiente nem dependências npm para o site. `.vercelignore` exclui o backend e os dados pessoais. Apenas `dist/index.html` e `dist/icon.svg` são publicados. Confirme em Deployments se o novo commit chegou a Ready.
+No modo local não são necessários Python, banco remoto, variáveis de ambiente nem dependências npm. `.vercelignore` exclui o backend Python e os dados pessoais. São publicados `dist/index.html`, `dist/icon.svg` e a função Node da pasta `api` (esta só funciona após configuração). Para ativar contas, siga [supabase/ATIVAR.md](supabase/ATIVAR.md). Confirme em Deployments se o novo commit chegou a Ready.
 
 ## Desenvolvimento
 
@@ -76,4 +76,4 @@ Rascunhos podem ficar sem chave ou com dados incompletos. Notas antigas não sã
 
 **Validação estrutural não é autenticação fiscal.** Não há consulta à SEFAZ nesta versão; uma pessoa pode montar uma chave matematicamente válida ou associar texto alterado a uma chave real. Os dados persistidos recebem fiscalValidation.authenticity = not_checked, nunca uma indicação de autenticidade confirmada. Não existe ainda uma base estatística coletiva. Na futura centralização, existência e conteúdo da nota precisam de verificação fiscal confiável no servidor; declarações do navegador não podem ser tratadas como prova.
 
-Login, sincronização, categorias e uso estatístico coletivo permanecem para outra etapa. O app atual não compartilha cupons. A participação estatística futura deverá ser independente do uso pessoal, opcional e baseada em consentimento explícito.
+Login e acesso entre dispositivos estão disponíveis no modo nuvem, após a configuração descrita no [guia de ativação](supabase/ATIVAR.md). Categorias e uso estatístico coletivo permanecem para outra etapa. O app não compartilha cupons entre usuários. A participação estatística futura deverá ser independente do uso pessoal, opcional e baseada em consentimento explícito.

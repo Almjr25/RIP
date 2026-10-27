@@ -11,3 +11,13 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
 .danger{border:1px solid #e2bdb6;background:#fff7f4;border-radius:7px;padding:12px 18px;color:#9a4234;font-size:12px;font-weight:600}.danger:hover{background:#fbe7e0}.danger:disabled{opacity:.5;cursor:wait}
 
 #fiscalStatus{display:block;font-size:10px;line-height:1.7;margin-top:7px}.fiscal-error{color:#9b5d2b}.fiscal-note{color:#617f60}.fiscal-pending{background:#fff0df;color:#906424}
+/* Account controls only appear in the cloud build. */
+.cloud-locked main > :not(#accountPanel){display:none!important}
+.cloud-locked aside nav{visibility:hidden}
+#accountPanel{margin:0 0 24px}
+#accountPanel h2{margin:0}
+#accountEmail{overflow-wrap:anywhere}
+.account-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+#passwordForm{max-width:420px;margin-top:18px}
+#passwordForm button{margin-top:12px}
+#loadMore{margin:20px 0}
