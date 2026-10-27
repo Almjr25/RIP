@@ -21,3 +21,5 @@ textarea{width:100%;margin-top:8px;padding:12px;border:1px solid #dce3d9;border-
 #passwordForm{max-width:420px;margin-top:18px}
 #passwordForm button{margin-top:12px}
 #loadMore{margin:20px 0}
+.account-feedback{font-size:13px;line-height:1.7;padding:12px 14px;border:1px solid #c8d8c3;border-radius:7px;background:#eff5eb;color:#315c43;overflow-wrap:anywhere}
+.account-feedback.error{background:#fff0e9;border-color:#e9c5b6;color:#8b422b}

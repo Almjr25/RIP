@@ -3,5 +3,8 @@
   "framework": null,
   "buildCommand": "node scripts/build_portable.mjs --vercel",
   "outputDirectory": "dist",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "functions": {
+    "api/**/*.js": { "maxDuration": 60 }
+  }
 }

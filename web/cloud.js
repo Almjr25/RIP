@@ -4,9 +4,15 @@ let cloudUser=null,cloudOffset=0,cloudStats=null,cloudMore=false,cloudWorking=fa
 async function cloudRequest(path,body){
  const account=cloudUser?.id,protectedRoute=/^\/api\/(purchases|stats|auth\/(password|logout))/.test(path);
  const headers={...(account?{'X-RIP-Account':account}:{}),...(body!==undefined?{'Content-Type':'application/json'}:{})};
- const response=await fetch(path,body===undefined?{cache:'no-store',headers}:{method:'POST',headers,body:JSON.stringify(body)});
- const value=await response.json().catch(()=>({error:'Resposta inesperada do servidor.'}));
- if(!response.ok){if(response.status===401)lockCloud();throw Error(value.error||'Não foi possível concluir.')}
+ let response,value;
+ try{
+  response=await fetch(path,body===undefined?{cache:'no-store',headers,signal:AbortSignal.timeout(40000)}:{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(40000)});
+  value=await response.json().catch(()=>({error:response.status===404?'O serviço de contas não foi encontrado. Atualize a página; se continuar, o deployment precisa ser verificado.':response.status>=500?'O serviço de contas está indisponível. Aguarde e tente novamente.':'O servidor retornou uma resposta inesperada. Atualize a página e tente novamente.'}));
+ }catch(e){
+  if(e.name==='TimeoutError'||e.name==='AbortError')throw Error('O servidor demorou para responder. Aguarde um momento antes de tentar novamente.');
+  throw Error('Não foi possível conectar. Verifique sua conexão e tente novamente.');
+ }
+ if(!response.ok){if(response.status===401&&protectedRoute)lockCloud();throw Error(value.error||'Não foi possível concluir.')}
  if(protectedRoute&&account!==cloudUser?.id)throw Error('A conta mudou. Atualize a página.');
  return value;
 }
@@ -19,7 +25,7 @@ async function cloudAPI(path,body){
  if(path==='/api/purchases/delete')return cloudRequest(path,{...body,_revision:purchase?._revision});
  return cloudRequest(path,body);
 }
-function cloudMessage(message,error=false){$('accountMessage').textContent=message;$('accountMessage').className=error?'error':'hint'}
+function cloudMessage(message,error=false){const node=$('accountMessage');node.textContent=message;node.className=error?'account-feedback error':'account-feedback';node.setAttribute('role',error?'alert':'status')}
 function lockCloud(){
  cloudUser=null;cloudStats=null;purchases=[];purchase=null;dirty=false;
  document.body.classList.add('cloud-locked');$('authForm').hidden=false;$('accountTools').hidden=true;
@@ -75,22 +81,37 @@ async function migrateCloud(input){
 }
 document.addEventListener('DOMContentLoaded',async()=>{
  const panel=document.createElement('section');panel.id='accountPanel';panel.className='card';
- panel.innerHTML=`<div class="card-title"><h2>Sua conta RIP</h2><span id="accountEmail"></span></div><p id="accountMessage" class="hint">Conectando…</p>
- <form id="authForm" hidden><p>Entre para guardar seus cupons e acessá-los em outros dispositivos. Os dados ficam privados na sua conta; não há participação em estatísticas coletivas nesta versão.</p><div class="fields"><label>E-mail<input id="authEmail" type="email" autocomplete="username" required maxlength="254"></label><label>Senha<input id="authPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label></div><div class="account-actions"><button class="primary" type="submit">Entrar</button><button class="secondary" type="button" id="signup">Criar conta</button><button class="text-button" type="button" id="recover">Esqueci a senha</button></div></form>
+ panel.innerHTML=`<div class="card-title"><h2>Sua conta RIP</h2><span id="accountEmail"></span></div><p id="accountMessage" class="account-feedback" role="status" aria-live="polite" aria-atomic="true">Conectando…</p>
+ <form id="authForm" novalidate hidden><p>Entre para guardar seus cupons e acessá-los em outros dispositivos. Os dados ficam privados na sua conta; não há participação em estatísticas coletivas nesta versão.</p><div class="fields"><label>E-mail<input id="authEmail" type="email" autocomplete="username" required maxlength="254"></label><label>Senha <small>(8 a 128 caracteres)</small><input id="authPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label></div><div class="account-actions"><button class="primary" type="submit">Entrar</button><button class="secondary" type="button" id="signup">Criar conta</button><button class="text-button" type="button" id="recover">Esqueci a senha</button></div></form>
  <div id="accountTools" hidden><div class="account-actions"><button class="secondary" id="migrateLocal" hidden></button><button class="text-button" id="exportLocalBackup" hidden>Backup dos dados locais antigos</button><button class="text-button" id="changePassword">Alterar senha</button><button class="text-button" id="logout">Sair</button></div><p class="hint">Compras salvas na nuvem. Copiar dados locais exige sua confirmação. Anexos antigos permanecem no navegador e nos backups locais.</p></div>
  <form id="passwordForm" hidden><label>Nova senha<input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label><button class="primary" type="submit">Salvar nova senha</button></form>`;
  document.querySelector('main').prepend(panel);
  const more=document.createElement('button');more.id='loadMore';more.className='secondary';more.textContent='Carregar mais compras';more.hidden=true;$('purchaseList').after(more);
  const originalRender=renderList;renderList=function(){originalRender();decorateCloudList()};
  lockCloud();
- async function authAction(path,body){
-  if(cloudWorking)return;cloudWorking=true;
-  try{const result=await cloudRequest(path,body);$('authPassword').value='';if(result.user){await unlockCloud(result.user);cloudMessage('Conta conectada.')}else cloudMessage(result.message);return result}
-  catch(e){cloudMessage(e.message,true)}finally{cloudWorking=false}
+ let authPending=false,authGeneration=0;
+ function setAuthPending(value){
+  authPending=value;
+  for(const form of [$('authForm'),$('passwordForm')]){
+   form.setAttribute('aria-busy',String(value));
+   for(const control of form.querySelectorAll('button,input'))control.disabled=value;
+  }
  }
- $('authForm').onsubmit=e=>{e.preventDefault();authAction('/api/auth/login',{email:$('authEmail').value,password:$('authPassword').value})};
- $('signup').onclick=()=>{if($('authForm').reportValidity())authAction('/api/auth/signup',{email:$('authEmail').value,password:$('authPassword').value})};
- $('recover').onclick=()=>{if($('authEmail').reportValidity())authAction('/api/auth/recover',{email:$('authEmail').value})};
+ function authCredentials(passwordRequired=true){
+  const email=$('authEmail').value.trim(),password=$('authPassword').value;
+  if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254){cloudMessage('Informe um e-mail válido.',true);$('authEmail').focus();return null}
+  if(passwordRequired&&(password.length<8||password.length>128)){cloudMessage('A senha precisa ter entre 8 e 128 caracteres.',true);$('authPassword').focus();return null}
+  return passwordRequired?{email,password}:{email};
+ }
+ async function authAction(path,body){
+  if(cloudWorking||authPending)return;cloudWorking=true;authGeneration++;setAuthPending(true);
+  cloudMessage(path.endsWith('/signup')?'Criando conta… Aguarde a resposta do servidor.':path.endsWith('/recover')?'Solicitando o e-mail de recuperação…':path.endsWith('/password')?'Salvando nova senha…':'Entrando na sua conta…');
+  try{const result=await cloudRequest(path,body);$('authPassword').value='';if(result.user){await unlockCloud(result.user);cloudMessage('Conta conectada.')}else cloudMessage(result.message);return result}
+  catch(e){cloudMessage(e.message,true)}finally{cloudWorking=false;setAuthPending(false)}
+ }
+ $('authForm').onsubmit=e=>{e.preventDefault();const body=authCredentials();if(body)authAction('/api/auth/login',body)};
+ $('signup').onclick=()=>{const body=authCredentials();if(body)authAction('/api/auth/signup',body)};
+ $('recover').onclick=()=>{const body=authCredentials(false);if(body)authAction('/api/auth/recover',body)};
  $('changePassword').onclick=()=>{$('passwordForm').hidden=!$('passwordForm').hidden};
  $('passwordForm').onsubmit=async e=>{e.preventDefault();const result=await authAction('/api/auth/password',{password:$('newPassword').value});if(result){$('newPassword').value='';$('passwordForm').hidden=true;cloudMessage('Senha alterada.')}};
  $('logout').onclick=async()=>{
@@ -116,8 +137,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
  const hash=new URLSearchParams(location.hash.slice(1));const recovery=hash.get('type')==='recovery';
  if(hash.has('access_token')||hash.has('error'))history.replaceState(null,'',location.pathname);
  try{
+  const generation=authGeneration;
   const result=hash.has('access_token')?await cloudRequest('/api/auth/session',{access_token:hash.get('access_token'),refresh_token:hash.get('refresh_token')}):await cloudRequest('/api/auth/status');
+  if(authGeneration!==generation)return;
   await unlockCloud(result.user);cloudMessage(recovery?'Defina sua nova senha abaixo.':'Conta conectada.');
   if(recovery)$('passwordForm').hidden=false;
- }catch(e){cloudMessage(hash.has('error')?'O link expirou ou é inválido. Solicite outro.':e.message,true)}
+ }catch(e){if(!authGeneration)cloudMessage(hash.has('error')?'O link expirou ou é inválido. Solicite outro.':e.message,true)}
 });

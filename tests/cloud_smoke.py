@@ -19,7 +19,9 @@ def main():
         with sync_playwright() as p:
             browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
             page=browser.new_page()
-            state={'user':None,'data':{},'saved':0,'recovered':False}
+            state={'user':None,'data':{},'saved':0,'recovered':False,'signup_calls':0,'hold_signup':True}
+            initial_status=[]
+            pending_signup=[]
             errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
             def route(r):
@@ -29,9 +31,13 @@ def main():
                 if path=='/api/auth/login':
                     state['user']={'id':body['email'],'email':body['email']};value={'user':state['user']}
                 elif path=='/api/auth/status':
-                    if state['user']:value={'user':state['user']}
+                    if not initial_status:initial_status.append(r);return
+                    elif state['user']:value={'user':state['user']}
                     else:code=401;value={'error':'Entre na sua conta para continuar.'}
-                elif path=='/api/auth/signup':value={'message':'Confira seu e-mail para confirmar a conta.'}
+                elif path=='/api/auth/signup':
+                    state['signup_calls']+=1
+                    if state['hold_signup']:pending_signup.append(r);return
+                    value={'message':'Confira seu e-mail para confirmar a conta.'}
                 elif path=='/api/auth/recover':state['recovered']=True;value={'message':'Você receberá o link de recuperação.'}
                 elif path=='/api/auth/password':value={'ok':True}
                 elif path=='/api/auth/logout':state['user']=None;value={'ok':True}
@@ -52,8 +58,28 @@ def main():
             page.wait_for_selector('#authForm:visible')
             assert not page.locator('#listView').is_visible()
             assert not page.locator('#editorView').is_visible()
+            page.locator('#signup').click()
+            page.wait_for_function("document.querySelector('#accountMessage').textContent.includes('e-mail válido')")
             page.locator('#authEmail').fill('alice@example.com')
+            page.locator('#authPassword').fill('short')
+            page.locator('#signup').click()
+            page.wait_for_function("document.querySelector('#accountMessage').textContent.includes('8 e 128')")
+            assert state['signup_calls']==0
             page.locator('#authPassword').fill('syntheticpassword')
+            page.locator('#signup').click()
+            page.wait_for_function("document.querySelector('#accountMessage').textContent.includes('Criando conta')")
+            assert page.locator('#signup').is_disabled()
+            assert page.locator('#authForm').get_attribute('aria-busy')=='true'
+            # A late initial 401 must not clear typed credentials or replace progress feedback.
+            initial_status[0].fulfill(status=401,content_type='application/json',body=json.dumps({'error':'Entre na sua conta.'}))
+            assert page.locator('#authPassword').input_value()=='syntheticpassword'
+            assert 'Criando conta' in page.locator('#accountMessage').inner_text()
+            pending_signup[0].fulfill(status=400,content_type='application/json',body=json.dumps({'error':'O envio de e-mails deste projeto ainda está restrito.'}))
+            page.wait_for_function("document.querySelector('#accountMessage').textContent.includes('restrito')")
+            assert page.locator('#accountMessage').get_attribute('role')=='alert'
+            assert page.locator('#signup').is_enabled()
+            assert page.locator('#authPassword').input_value()=='syntheticpassword'
+            state['hold_signup']=False
             page.locator('#signup').click()
             page.wait_for_function("document.querySelector('#accountMessage').textContent.includes('Confira')")
             page.locator('#recover').click()
@@ -103,7 +129,7 @@ def main():
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             assert not errors, errors
             browser.close()
-            print('PASS: login, confirmação/recuperação, importação explícita sem duplicar, edição, backup, saída, outra conta e celular; API simulada.')
+            print('PASS: validação visível, progresso e falha de cadastro, resposta inicial atrasada, login, confirmação/recuperação, importação, backup, troca de conta e celular; API simulada.')
     finally:
         server.terminate();server.wait()
         subprocess.run(['node','scripts/build_portable.mjs','--vercel'],cwd=ROOT,env={**os.environ,'RIP_CLOUD_ENABLED':'false'},check=True)

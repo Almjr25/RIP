@@ -5,12 +5,12 @@ const fiscal=require('../web/fiscal.js');
 const validation=require('../web/validation.js');
 const COOKIE='__Host-rip_';
 function config(){
- const url=process.env.SUPABASE_URL?.replace(/\/+$/,'');
- const key=process.env.SUPABASE_PUBLISHABLE_KEY;
- const origin=process.env.RIP_APP_ORIGIN?.replace(/\/+$/,'');
+ const url=process.env.SUPABASE_URL?.trim().replace(/\/+$/,'');
+ const key=process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
+ const origin=process.env.RIP_APP_ORIGIN?.trim().replace(/\/+$/,'');
  if(!url||!key||!origin)throw Object.assign(Error('A conexão com o banco ainda não foi configurada na Vercel.'),{status:503});
  if(!key.startsWith('sb_publishable_'))throw Object.assign(Error('Configure a chave publishable do Supabase, nunca uma chave secreta.'),{status:503});
- if(!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(url)||!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/.test(origin))throw Error('Configuração de endereço inválida.');
+ if(!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(url)||!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/.test(origin))throw Object.assign(Error('A conexão está com um endereço inválido na configuração do aplicativo.'),{status:503});
  return {url,key,origin};
 }
 function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').filter(x=>x.includes('=')).map(x=>{const n=x.indexOf('=');return [x.slice(0,n).trim(),x.slice(n+1)]}))}
@@ -30,7 +30,11 @@ async function request(c,path,{method='GET',body,token}={}){
   if(value?.code==='23505')message='Já existe uma compra com esta chave fiscal na sua conta.';
   else if(value?.code==='P0001')message=value.message;
   else if(r.status===429)message='Muitas tentativas. Aguarde antes de tentar novamente.';
-  else if(path.startsWith('/auth/'))message=({invalid_credentials:'E-mail ou senha incorretos.',email_not_confirmed:'Confirme seu e-mail antes de entrar.',weak_password:'Use uma senha mais forte.',same_password:'Escolha uma senha diferente da atual.',over_email_send_rate_limit:'Aguarde antes de pedir outro e-mail.',user_already_exists:'Não foi possível criar a conta. Tente entrar ou recuperar a senha.'})[value?.error_code||value?.code]||'Não foi possível autenticar. Confira os dados ou solicite outro link.';
+  else if(path.startsWith('/auth/')){
+   const messages={invalid_credentials:'E-mail ou senha incorretos.',email_not_confirmed:'Confirme seu e-mail antes de entrar.',weak_password:'Use uma senha mais forte.',same_password:'Escolha uma senha diferente da atual.',over_email_send_rate_limit:'Aguarde antes de pedir outro e-mail.',user_already_exists:'Não foi possível criar a conta. Tente entrar ou recuperar a senha.',signup_disabled:'A criação de contas ainda não foi habilitada pelo responsável pelo aplicativo.',email_provider_disabled:'O login por e-mail ainda não foi habilitado pelo responsável pelo aplicativo.',email_address_not_authorized:'O envio de e-mails deste projeto ainda está restrito. O responsável pelo aplicativo precisa liberar o serviço de e-mail.',email_address_invalid:'Este endereço de e-mail não foi aceito. Confira o endereço e tente novamente.'};
+   message=messages[value?.error_code||value?.code]||(r.status>=500?'O serviço de autenticação está indisponível ou não conseguiu enviar o e-mail. Tente novamente mais tarde.':'Não foi possível autenticar. Confira os dados ou solicite outro link.');
+   if(value?.message==='Invalid API key')message='A chave de conexão do aplicativo é inválida. A configuração precisa ser corrigida pelo responsável.';
+  }
   else if(value?.code==='PGRST202'||value?.code==='42P01')message='O banco ainda precisa receber o SQL de instalação do RIP.';
   fail(message,r.status===429?429:r.status>=500?503:400);
  }
