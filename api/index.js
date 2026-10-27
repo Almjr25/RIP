@@ -73,7 +73,11 @@ function validateBody(p){
 async function handler(req,res){
  res.setHeader('Cache-Control','no-store');res.setHeader('Vary','Cookie');res.setHeader('X-Content-Type-Options','nosniff');
  try{
-  const c=config(),path=new URL(req.url,'https://rip.invalid').pathname,method=req.method;
+  const c=config(),url=new URL(req.url,'https://rip.invalid'),method=req.method;
+  // Static Vercel projects use one concrete function plus an explicit rewrite.
+  // Handle both original request URLs and the destination URL provided by the router.
+  const route=req.query?.rip_route??url.searchParams.get('rip_route');
+  const path=['/api/index','/api/index.js'].includes(url.pathname)&&typeof route==='string'?'/api/'+route:url.pathname;
   if(!['GET','POST'].includes(method))fail('Método não permitido.',405);
   if(method==='POST'&&req.headers.origin!==c.origin)fail('Origem da requisição não permitida.',403);
   if(method==='POST'&&!String(req.headers['content-type']||'').startsWith('application/json'))fail('Envie dados em JSON.',415);

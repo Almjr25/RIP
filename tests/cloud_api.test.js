@@ -1,6 +1,6 @@
 const {test,afterEach}=require('node:test');
 const assert=require('node:assert/strict');
-const handler=require('../api/[...path].js');
+const handler=require('../api/index.js');
 const originalFetch=global.fetch;
 const originalEnv={...process.env};
 afterEach(()=>{global.fetch=originalFetch;for(const k of ['SUPABASE_URL','SUPABASE_PUBLISHABLE_KEY','RIP_APP_ORIGIN']){if(originalEnv[k]===undefined)delete process.env[k];else process.env[k]=originalEnv[k]}});
@@ -20,3 +20,5 @@ test('cadastro informa restrição real do serviço de e-mail sem expor dados',a
 test('cadastro informa confirmação e usa o redirect configurado',async()=>{configured();let endpoint;global.fetch=async url=>{endpoint=url;return response({id:'test'})};const r=await call('/api/auth/signup','POST',{email:'test@example.com',password:'password123'});assert.equal(r.statusCode,200);assert.match(r.value.message,/Confira seu e-mail/);assert.equal(new URL(endpoint).searchParams.get('redirect_to'),'https://ripb.vercel.app')});
 test('cadastro recusa senha curta antes de chamar autenticação',async()=>{configured();global.fetch=()=>{throw Error('não deveria chamar')};const r=await call('/api/auth/signup','POST',{email:'test@example.com',password:'short'});assert.equal(r.statusCode,400);assert.match(r.value.error,/8 e 128/)});
 test('conexão indisponível devolve erro visível sem criar conta',async()=>{configured();global.fetch=async()=>{throw Error('private connection details')};const r=await call('/api/auth/signup','POST',{email:'test@example.com',password:'password123'});assert.equal(r.statusCode,503);assert.match(r.value.error,/conectar/);assert(!r.value.error.includes('private'))});
+test('rota reescrita pela Vercel chega ao cadastro',async()=>{configured();let endpoint;global.fetch=async url=>{endpoint=url;return response({id:'test'})};const r=await call('/api/index?rip_route=auth%2Fsignup','POST',{email:'test@example.com',password:'password123'});assert.equal(r.statusCode,200);assert.match(endpoint,/\/auth\/v1\/signup\?/)});
+test('rota reescrita preserva paginação e consulta detalhada',async()=>{configured();let endpoint;global.fetch=async url=>{if(url.endsWith('/user'))return response({id:'u'});endpoint=url;return response([])};const r=await call('/api/index?rip_route=purchases&offset=30','GET',undefined,{cookie:'__Host-rip_access=user-token'});assert.equal(r.statusCode,200);assert.equal(new URL(endpoint).searchParams.get('offset'),'30')});

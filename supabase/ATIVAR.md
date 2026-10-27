@@ -38,7 +38,7 @@ Projeto **ripb → Settings → Environment Variables**. Cadastre para **Product
 
 Use a URL raiz, **sem `/rest/v1/`**. Não é necessário fornecer senha do banco, chave secret nem service_role. O backend usa a chave pública com o JWT de cada usuário; as políticas RLS permanecem em vigor.
 
-Depois de salvar, vá em **Deployments → último deployment da branch main → Redeploy**. As variáveis novas só entram no próximo deployment. Mantenha **Framework: Other** e as configurações de build/output do `vercel.json`; não altere para Python. Há uma função Node em `api/[...path].js`, descoberta pela Vercel, além dos arquivos de `dist`.
+Depois de salvar, vá em **Deployments → último deployment da branch main → Redeploy**. As variáveis novas só entram no próximo deployment. Mantenha **Framework: Other** e as configurações de build/output do `vercel.json`; não altere para Python. Há uma função Node em `api/index.js`, além dos arquivos de `dist`. O `vercel.json` encaminha explicitamente as rotas `/api/*` a essa função, mantendo os parâmetros de consulta.
 
 Não habilite a configuração de produção indiscriminadamente em previews: o `RIP_APP_ORIGIN` e os redirects devem corresponder à origem usada. Prefira um segundo projeto Supabase para desenvolvimento e testes. Nunca use cupons pessoais em testes automatizados.
 
@@ -70,4 +70,11 @@ npm install --prefix .data/pg-test --no-audit --no-fund @electric-sql/pglite
 node tests/cloud_db.test.mjs
 ```
 
-`python3 tests/cloud_smoke.py` requer Playwright/Chromium e testa a interface com respostas simuladas. Ele não envia e-mails nem cria contas reais. Os testes locais não substituem o teste final no projeto configurado.
+`python3 tests/cloud_smoke.py` requer Playwright/Chromium e testa a interface com respostas simuladas. Ele não envia e-mails nem cria contas reais. Para verificar também o encaminhamento com o roteador oficial da Vercel:
+
+```sh
+npm install --prefix .data/vercel-routing --no-audit --no-fund @vercel/routing-utils
+node tests/cloud_routing.test.js
+```
+
+Os testes locais não substituem o teste final no projeto configurado.
